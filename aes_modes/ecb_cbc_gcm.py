@@ -94,6 +94,36 @@ def roundtrip_checks():
     assert aes_gcm_decrypt(key, nonce, ctg, tag, aad=b"meta") == msg
     print("[Roundtrip] ECB, CBC, GCM all OK")
 
+
+def demo_gcm_keystream_reuse_xor_leak():
+    key = get_random_bytes(16)
+    nonce = get_random_bytes(12)  # BAD: reused nonce
+    # Construct messages: identical except a middle slice differs
+    prefix = b"A" * 32
+    mid1 = b"TOPSECRET"
+    mid2 = b"REDACTED!"
+    suffix = b"A" * 32
+    p1 = prefix + mid1 + suffix
+    p2 = prefix + mid2 + suffix
+
+    # Same key + SAME nonce (this is the vulnerability)
+    n1, c1, t1 = aes_gcm_encrypt(key, p1, nonce=nonce)
+    n2, c2, t2 = aes_gcm_encrypt(key, p2, nonce=nonce)
+
+    # Keystream reuse property in CTR/GCM: C1 ^ C2 = P1 ^ P2
+    leak = bytes(x ^ y for x, y in zip(c1, c2))
+    expected = bytes(x ^ y for x, y in zip(p1, p2))
+    print("[GCM] Keystream reuse: XOR(c1,c2) == XOR(p1,p2)?", leak == expected)
+
+    # Show recovery of p2's differing middle when p1's middle is known
+    start = len(prefix)
+    end = start + len(mid1)
+    c1_mid = c1[start:end]
+    c2_mid = c2[start:end]
+    recovered_p2_mid = bytes(a ^ b ^ c for (a, b, c) in zip(c1_mid, c2_mid, mid1))
+    print("[GCM] Recover p2's middle given p1's middle:", recovered_p2_mid)
+
+
 if __name__ == "__main__":
     print("== AES Demos ==")
     roundtrip_checks()
