@@ -26,6 +26,7 @@ from aes_modes.ecb_cbc_gcm import (
     demo_ecb_pattern_leakage,
     demo_cbc_iv_reuse,
     demo_gcm_nonce_reuse,
+    demo_gcm_keystream_reuse_xor_leak,
 )
 
 # RSA: build a small roundtrip using the provided primitives
@@ -82,6 +83,8 @@ def run_aes():
     demo_ecb_pattern_leakage()
     demo_cbc_iv_reuse()
     demo_gcm_nonce_reuse()
+    print("[GCM] Demonstrating keystream reuse XOR leakage...")
+    demo_gcm_keystream_reuse_xor_leak()
     print("AES demos done.")
     line()
 
