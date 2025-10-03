@@ -17,6 +17,22 @@ pip install -r requirements.txt
 
 ## How to run
 
+## One entry point (interactive CLI)
+```bash
+python lab2_cli.py
+```
+
+## Non-interactive
+
+```bash
+python lab2_cli.py --run aes
+python lab2_cli.py --run rsa
+python lab2_cli.py --run dh
+python lab2_cli.py --run ecdh
+python lab2_cli.py --run bleichenbacher
+python lab2_cli.py --run all
+```
+
 ```bash
 python aes_modes/ecb_cbc_gcm.py
 python rsa/rsa_from_scratch.py
