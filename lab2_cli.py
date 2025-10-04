@@ -28,6 +28,7 @@ from aes_modes.ecb_cbc_gcm import (
     demo_gcm_nonce_reuse,
     demo_gcm_keystream_reuse_xor_leak,
 )
+from aes_modes.aes_file_io import run_encrypt_console, run_decrypt_console
 
 # RSA: build a small roundtrip using the provided primitives
 from rsa.rsa_from_scratch import (
@@ -76,7 +77,7 @@ def menu():
     print("  0) Exit")
     return input("\nEnter choice: ").strip()
 
-def run_aes():
+def _run_aes_demos():
     line()
     print("== AES Demos ==")
     aes_roundtrip()
@@ -87,6 +88,32 @@ def run_aes():
     demo_gcm_keystream_reuse_xor_leak()
     print("AES demos done.")
     line()
+
+
+def run_aes(run_default: bool = False):
+    if run_default:
+        _run_aes_demos()
+        return
+
+    while True:
+        line()
+        print("== AES Menu ==")
+        print("  1) Run AES demos")
+        print("  a) Encrypt to file")
+        print("  b) Decrypt from file")
+        print("  0) Back")
+        choice = input("Select an option: ").strip().lower()
+        if choice == "1":
+            _run_aes_demos()
+        elif choice == "a":
+            run_encrypt_console()
+        elif choice == "b":
+            run_decrypt_console()
+        elif choice == "0" or choice in {"q", "quit", "exit"}:
+            line()
+            break
+        else:
+            print("Invalid option. Choose 0, 1, a, or b.")
 
 def run_rsa():
     line()
@@ -132,7 +159,7 @@ def run_bleichenbacher():
     line()
 
 def run_all():
-    run_aes()
+    run_aes(run_default=True)
     run_rsa()
     run_dh()
     run_ecdh()
@@ -159,7 +186,7 @@ def main():
     args = parse_args()
     if args.run:
         mapping = {
-            "aes": run_aes,
+            "aes": lambda: run_aes(run_default=True),
             "rsa": run_rsa,
             "dh": run_dh,
             "ecdh": run_ecdh,
