@@ -311,7 +311,38 @@ def run_decrypt_console() -> None:
     """Interactive prompt for decrypting a message from a JSON file."""
 
     print("-- AES Decrypt from File --")
-    in_file = input("Input file path: ").strip()
+    encrypted_dir = Path("EncryptedFiles")
+    if not encrypted_dir.exists():
+        print("No encrypted files found (directory 'EncryptedFiles' does not exist).")
+        return
+
+    files = sorted(
+        file for file in encrypted_dir.iterdir() if file.is_file() and file.suffix == ".json"
+    )
+
+    if not files:
+        print("No encrypted JSON files found in 'EncryptedFiles'.")
+        return
+
+    print("Available encrypted files:")
+    for idx, file in enumerate(files, start=1):
+        print(f"  {idx}) {file.name}")
+
+    while True:
+        selection = input("Select a file number to decrypt (or 'q' to cancel): ").strip()
+        if selection.lower() in {"q", "quit", "exit", "0"}:
+            print("Decryption cancelled.")
+            return
+        try:
+            choice = int(selection)
+        except ValueError:
+            print("Invalid selection. Enter a number from the list or 'q' to cancel.")
+            continue
+        if not 1 <= choice <= len(files):
+            print("Selection out of range. Try again.")
+            continue
+        in_file = files[choice - 1]
+        break
 
     try:
         plaintext = decrypt_from_file(in_file)
