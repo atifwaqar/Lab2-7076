@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -217,9 +218,21 @@ def run_encrypt_console() -> None:
     plaintext_str = input("Enter plaintext: ")
     plaintext = plaintext_str.encode("utf-8")
 
-    out_file = input("Output file path: ").strip()
-    if out_file and not out_file.lower().endswith(".json"):
-        out_file += ".json"
+    name_hint = input(
+        "Name for encrypted output (optional, used in filename): "
+    ).strip()
+    if not name_hint:
+        name_hint = mode_name.lower()
+    sanitized_name = "".join(
+        ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in name_hint
+    ).strip("_")
+    if not sanitized_name:
+        sanitized_name = "encryption"
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_dir = Path("EncryptedFiles")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    out_file = output_dir / f"{sanitized_name}_{timestamp}.json"
 
     store_key_answer = input("Store key in file? (y/N): ").strip().lower()
     store_key = store_key_answer in {"y", "yes"}
@@ -277,7 +290,12 @@ def run_encrypt_console() -> None:
         print(f"Encryption failed: {exc}")
         return
 
-    print(f"Encrypted data written to {out_file}.")
+    json_path = out_file.resolve()
+    bin_path = out_file.with_suffix(out_file.suffix + ".bin").resolve()
+    print("Encrypted data saved.")
+    print(f"  JSON metadata: {json_path}")
+    if bin_path.exists():
+        print(f"  Ciphertext bytes: {bin_path}")
     if not store_key:
         print("Encryption key (Base64) — keep this safe:")
         print(_b64encode(key))
