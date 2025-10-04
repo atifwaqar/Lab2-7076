@@ -9,6 +9,15 @@ This repository contains reference implementations for:
 
 ## Quickstart
 
+Just run the CLI entry point – it now bootstraps a local virtual environment
+and installs `requirements.txt` automatically on first use:
+
+```bash
+python lab2_cli.py
+```
+
+Prefer to manage the environment manually? You still can:
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
