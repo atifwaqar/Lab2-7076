@@ -99,21 +99,21 @@ def run_aes(run_default: bool = False):
         line()
         print("== AES Menu ==")
         print("  1) Run AES demos")
-        print("  a) Encrypt to file")
-        print("  b) Decrypt from file")
+        print("  2) Encrypt to file")
+        print("  3) Decrypt from file")
         print("  0) Back")
         choice = input("Select an option: ").strip().lower()
         if choice == "1":
             _run_aes_demos()
-        elif choice == "a":
+        elif choice == "2":
             run_encrypt_console()
-        elif choice == "b":
+        elif choice == "3":
             run_decrypt_console()
         elif choice == "0" or choice in {"q", "quit", "exit"}:
             line()
             break
         else:
-            print("Invalid option. Choose 0, 1, a, or b.")
+            print("Invalid option. Choose 0-3.")
 
 def run_rsa():
     line()

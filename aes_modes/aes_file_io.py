@@ -207,8 +207,14 @@ def run_encrypt_console() -> None:
     """Interactive prompt for encrypting a message to a JSON file."""
 
     print("-- AES Encrypt to File --")
+    mode_mapping = {"1": "ECB", "2": "CBC", "3": "GCM"}
     while True:
-        mode = input("Choose mode (ECB/CBC/GCM): ").strip().upper()
+        print("Choose mode:")
+        print("  1) ECB")
+        print("  2) CBC")
+        print("  3) GCM")
+        selection = input("Select a mode: ").strip()
+        mode = mode_mapping.get(selection, selection)
         try:
             mode_name = _validate_mode(mode)
             break
