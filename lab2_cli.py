@@ -36,14 +36,28 @@ from rsa.rsa_from_scratch import (
     i2osp, os2ip,
     encrypt_int, decrypt_int,
 )
+from rsa.rsa_file_io import (
+    run_encrypt_console as run_rsa_encrypt_console,
+    run_decrypt_console as run_rsa_decrypt_console,
+)
 
 # DH / ECDH have demo() functions
 from dh.dh_small_prime import demo as dh_demo
+from dh.dh_file_io import (
+    run_encrypt_console as run_dh_encrypt_console,
+    run_decrypt_console as run_dh_decrypt_console,
+)
 
 try:
     from ecdh.ecdh_tinyec import demo as ecdh_demo
+    from ecdh.ecdh_file_io import (
+        run_encrypt_console as run_ecdh_encrypt_console,
+        run_decrypt_console as run_ecdh_decrypt_console,
+    )
 except Exception as e:
     ecdh_demo = None
+    run_ecdh_encrypt_console = None
+    run_ecdh_decrypt_console = None
     _ecdh_import_error = e
 
 # Bleichenbacher oracle scaffold (optional)
@@ -115,7 +129,7 @@ def run_aes(run_default: bool = False):
         else:
             print("Invalid option. Choose 0-3.")
 
-def run_rsa():
+def _run_rsa_demo():
     line()
     print("== RSA Round-trip ==")
     # small demo using existing functions
@@ -131,13 +145,65 @@ def run_rsa():
         print("ERROR: RSA round-trip failed.")
     line()
 
-def run_dh():
+def run_rsa(run_default: bool = False):
+    if run_default:
+        _run_rsa_demo()
+        return
+
+    while True:
+        line()
+        print("== RSA Menu ==")
+        print("  1) Run RSA round-trip demo")
+        print("  2) Encrypt to file")
+        print("  3) Decrypt from file")
+        print("  0) Back")
+        choice = input("Select an option: ").strip().lower()
+        if choice == "1":
+            _run_rsa_demo()
+        elif choice == "2":
+            run_rsa_encrypt_console()
+        elif choice == "3":
+            run_rsa_decrypt_console()
+        elif choice == "0" or choice in {"q", "quit", "exit"}:
+            line()
+            break
+        else:
+            print("Invalid option. Choose 0-3.")
+
+
+def _run_dh_demo():
     line()
     print("== Diffie–Hellman (finite field) ==")
     dh_demo()
     line()
 
-def run_ecdh():
+def run_dh(run_default: bool = False):
+    if run_default:
+        _run_dh_demo()
+        return
+
+    while True:
+        line()
+        print("== DH Menu ==")
+        print("  1) Run DH demo")
+        print("  2) Encrypt to file")
+        print("  3) Decrypt from file")
+        print("  0) Back")
+        choice = input("Select an option: ").strip().lower()
+        if choice == "1":
+            _run_dh_demo()
+        elif choice == "2":
+            run_dh_encrypt_console()
+        elif choice == "3":
+            run_dh_decrypt_console()
+        elif choice == "0" or choice in {"q", "quit", "exit"}:
+            line()
+            break
+        else:
+            print("Invalid option. Choose 0-3.")
+
+
+def _run_ecdh_demo():
     line()
     print("== ECDH (tinyec) ==")
     if ecdh_demo is None:
@@ -147,6 +213,38 @@ def run_ecdh():
     else:
         ecdh_demo()
     line()
+
+
+def run_ecdh(run_default: bool = False):
+    if run_default:
+        _run_ecdh_demo()
+        return
+
+    while True:
+        line()
+        print("== ECDH Menu ==")
+        print("  1) Run ECDH demo")
+        print("  2) Encrypt to file")
+        print("  3) Decrypt from file")
+        print("  0) Back")
+        choice = input("Select an option: ").strip().lower()
+        if choice == "1":
+            _run_ecdh_demo()
+        elif choice == "2":
+            if run_ecdh_encrypt_console is None:
+                print("ECDH file helpers unavailable. Import failed.")
+            else:
+                run_ecdh_encrypt_console()
+        elif choice == "3":
+            if run_ecdh_decrypt_console is None:
+                print("ECDH file helpers unavailable. Import failed.")
+            else:
+                run_ecdh_decrypt_console()
+        elif choice == "0" or choice in {"q", "quit", "exit"}:
+            line()
+            break
+        else:
+            print("Invalid option. Choose 0-3.")
 
 def run_bleichenbacher():
     line()
@@ -160,9 +258,9 @@ def run_bleichenbacher():
 
 def run_all():
     run_aes(run_default=True)
-    run_rsa()
-    run_dh()
-    run_ecdh()
+    run_rsa(run_default=True)
+    run_dh(run_default=True)
+    run_ecdh(run_default=True)
     run_bleichenbacher()
     print("All demos completed.")
 
