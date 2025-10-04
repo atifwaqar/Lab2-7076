@@ -109,9 +109,15 @@ def encrypt_to_file(
 
     output_path = Path(out_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    cipher_bytes = None
     if "ciphertext_b64" in bundle:
-        bundle["ciphertext_len"] = len(base64.b64decode(bundle["ciphertext_b64"]))
+        cipher_bytes = base64.b64decode(bundle["ciphertext_b64"])
+        bundle["ciphertext_len"] = len(cipher_bytes)
     output_path.write_text(json.dumps(bundle, indent=2) + "\n")
+
+    if cipher_bytes is not None:
+        bin_path = output_path.with_suffix(output_path.suffix + ".bin")
+        bin_path.write_bytes(cipher_bytes)
 
     return key_bytes
 

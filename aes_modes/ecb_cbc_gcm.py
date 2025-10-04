@@ -1,8 +1,15 @@
-from Crypto.Cipher import AES
-from Crypto.Random import get_random_bytes
+import base64
 import os
 
+from Crypto.Cipher import AES
+from Crypto.Random import get_random_bytes
+
 BLOCK = 16
+
+
+def xor_hex(a: bytes, b: bytes) -> str:
+    n = min(len(a), len(b))
+    return bytes(x ^ y for x, y in zip(a[:n], b[:n])).hex()
 
 def pkcs7_pad(b: bytes, block: int = BLOCK) -> bytes:
     pad = block - (len(b) % block)
@@ -110,10 +117,18 @@ def demo_gcm_keystream_reuse_xor_leak():
     n1, c1, t1 = aes_gcm_encrypt(key, p1, nonce=nonce)
     n2, c2, t2 = aes_gcm_encrypt(key, p2, nonce=nonce)
 
+    # Emulate reading ciphertext bundles from JSON files
+    bundle1 = {"ciphertext_b64": base64.b64encode(c1).decode("ascii")}
+    bundle2 = {"ciphertext_b64": base64.b64encode(c2).decode("ascii")}
+    ct1 = base64.b64decode(bundle1["ciphertext_b64"])
+    ct2 = base64.b64decode(bundle2["ciphertext_b64"])
+
     # Keystream reuse property in CTR/GCM: C1 ^ C2 = P1 ^ P2
-    leak = bytes(x ^ y for x, y in zip(c1, c2))
-    expected = bytes(x ^ y for x, y in zip(p1, p2))
-    print("[GCM] Keystream reuse: XOR(c1,c2) == XOR(p1,p2)?", leak == expected)
+    leak_hex = xor_hex(ct1, ct2)
+    expected_hex = xor_hex(p1, p2)
+    print("[GCM] Keystream reuse: XOR(c1,c2) == XOR(p1,p2)?", leak_hex == expected_hex)
+    print("[GCM] XOR(ct1, ct2):", leak_hex)
+    print("[GCM] XOR(pt1, pt2):", expected_hex)
 
     # Show recovery of p2's differing middle when p1's middle is known
     start = len(prefix)
