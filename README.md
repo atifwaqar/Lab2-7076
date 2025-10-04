@@ -41,6 +41,22 @@ python ecdh/ecdh_tinyec.py
 python attacks/bleichenbacher_oracle.py  # optional scaffold
 ```
 
+### File-based encryption helpers
+
+The interactive CLI now provides helper utilities to encrypt/decrypt short
+messages to JSON bundles using several algorithms:
+
+- **AES (ECB/CBC/GCM)** — original helpers retained under `EncryptedFiles/`.
+- **RSA** — generates textbook RSA key pairs (no padding) and stores ciphertext
+  bundles in `EncryptedFiles/RSA/`.
+- **Diffie–Hellman (finite field)** — derives an AES-GCM key from the shared
+  secret and stores metadata in `EncryptedFiles/DH/`.
+- **Elliptic-Curve Diffie–Hellman** — derives an AES-GCM key on a TinyEC curve
+  and stores metadata in `EncryptedFiles/ECDH/`.
+
+Each helper offers the option to omit secret material from the JSON bundle, in
+which case the CLI prints the necessary key so it can be recorded securely.
+
 See `aes_modes/README.md` for AES-specific notes.
 
 ## Report
