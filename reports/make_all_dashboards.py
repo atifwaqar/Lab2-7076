@@ -77,7 +77,7 @@ def _invoke_dashboard(
 def make_all_dashboards() -> List[DashboardResult]:
     """Generate all available dashboards and describe the outcome of each attempt."""
 
-    out_dir = ensure_out_dir("out")
+    out_dir = ensure_out_dir("Visualizations")
     results: List[DashboardResult] = []
 
     if not HAS_MPL:
