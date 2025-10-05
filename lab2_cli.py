@@ -21,7 +21,7 @@ import argparse
 import pathlib
 import sys
 import textwrap
-
+import pyfiglet
 # Ensure relative repo imports work even if executed from another directory.
 sys.path.insert(0, str(pathlib.Path(__file__).parent.resolve()))
 
@@ -72,15 +72,7 @@ try:
 except Exception:
     bleichenbacher_demo = None
 
-BANNER = r"""
-  _          _        __     ___  
- | |        | |       \ \   / / | 
- | |     ___| |__   ___\ \_/ /| | 
- | |    / __| '_ \ / _ \\   / | | 
- | |____\__ \ | | |  __/ | |  | | 
- |______|___/_| |_|\___| |_|  |_|   Lab 2 — Crypto Demos
-
-"""
+BANNER = pyfiglet.figlet_format("Lab2 - Crypto Demos")
 
 def line():
     print("-" * 70)
