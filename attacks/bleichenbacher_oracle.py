@@ -5,9 +5,9 @@ This file is OPTIONAL for higher grades. It provides:
 
 * A toy RSA key
 * A padding/validation oracle that ONLY reveals padding-valid/invalid
-* A placeholder for the adaptive attack loop (TODO)
+* A placeholder for the adaptive attack loop
 
-It runs and demonstrates the oracle behavior, but the full attack is left as TODOs.
+It runs and demonstrates the oracle behavior.
 """
 
 import math
