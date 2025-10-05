@@ -5,7 +5,7 @@ import hashlib
 import os
 import secrets
 import warnings
-from typing import Callable, Iterable, Tuple
+from typing import Callable, Iterable, List, Tuple
 
 try:  # pragma: no cover - fallback used in headless test environments
     import matplotlib.pyplot as plt
@@ -201,15 +201,25 @@ def _demo_validation_failures(curve) -> None:
     if not HAS_TINYEC:
         raise RuntimeError("tinyec is required to demonstrate validation failures")
 
-    rogue_curve = registry.get_curve("secp256k1")
-    test_cases: Iterable[Tuple[str, Callable[[], ec.Point]]] = [
+    try:
+        rogue_curve = registry.get_curve("secp256k1")
+    except (AttributeError, ValueError):
+        rogue_curve = None
+
+    test_cases: List[Tuple[str, Callable[[], ec.Point]]] = [
         ("the point at infinity", lambda: curve.g * curve.field.n),
-        (
-            "a point from a different curve (secp256k1)",
-            lambda: rogue_curve.g,
-        ),
         ("coordinates that do not satisfy the curve equation", lambda: _forge_point_off_curve(curve)),
     ]
+
+    if rogue_curve is not None:
+        test_cases.append(
+            (
+                "a point from a different curve (secp256k1)",
+                lambda: rogue_curve.g,
+            )
+        )
+    else:
+        print("    * tinyec registry does not expose secp256k1; skipping cross-curve validation demo.")
 
     print("[ECDH] Demonstrating parameter validation failures:")
     for description, factory in test_cases:
