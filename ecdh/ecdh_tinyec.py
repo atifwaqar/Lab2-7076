@@ -117,7 +117,8 @@ def _sanity_checks(curve, dA, dB, QA, QB, S1, S2):
     kA = hashlib.sha256(_x_bytes(curve, S1)).hexdigest()
     kB = hashlib.sha256(_x_bytes(curve, S2)).hexdigest()
     assert kA == kB, "derived keys differ"
-    print("ECDH checks passed. key =", kA[:16], "…")
+    print("[ECDH] Sanity checks passed.")
+    print(f"[ECDH] Derived shared secret SHA-256: {kA}")
 
 
 # -------- demo --------
@@ -143,7 +144,14 @@ def demo():
     S1 = dA * QB
     S2 = dB * QA
     _sanity_checks(curve, dA, dB, QA, QB, S1, S2)
-    print(f"ECDH on {curve.name}: shared point established. x(S) = {hex(int(S1.x))[:12]}…")
+    modulus_bits = curve.field.p.bit_length()
+    print(f"[ECDH] Curve: {curve.name} (p={modulus_bits} bits)")
+    print(f"[ECDH] Generator G.x: 0x{int(curve.g.x):x}")
+    print(f"[ECDH] Alice private dA: 0x{dA:x}")
+    print(f"[ECDH] Bob private dB: 0x{dB:x}")
+    print(f"[ECDH] Alice public QA: (x=0x{int(QA.x):x}, y=0x{int(QA.y):x})")
+    print(f"[ECDH] Bob public QB: (x=0x{int(QB.x):x}, y=0x{int(QB.y):x})")
+    print(f"[ECDH] Shared point S: (x=0x{int(S1.x):x}, y=0x{int(S1.y):x})")
 
     samples = [k * curve.g for k in range(1, 11)]
     _plot_curve_samples(curve, samples)

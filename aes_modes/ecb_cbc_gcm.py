@@ -60,7 +60,13 @@ def demo_ecb_pattern_leakage():
     ct = aes_ecb_encrypt(key, pt)
     blocks = [ct[i:i + 16] for i in range(0, len(ct), 16)]
     unique_blocks = len(set(blocks))
-    print(f"[ECB] blocks={len(blocks)}, unique_blocks={unique_blocks} (lower is worse)")
+    print("[ECB] Key:", key.hex())
+    print(f"[ECB] Total blocks: {len(blocks)}, unique blocks: {unique_blocks} (lower is worse)")
+    print("[ECB] Ciphertext block pattern:")
+    for idx, block_bytes in enumerate(blocks, start=1):
+        marker = "*" if blocks.count(block_bytes) > 1 else " "
+        print(f"    Block {idx:02d}{marker}: {block_bytes.hex()}")
+    print("[ECB] Repeated blocks (marked with * ) reveal the repeated plaintext pattern.")
 
 def demo_cbc_iv_reuse():
     key = get_random_bytes(16)
@@ -80,9 +86,16 @@ def demo_cbc_iv_reuse():
     c1_first_block = c1_body[:BLOCK]
     c2_first_block = c2_body[:BLOCK]
 
+    print("[CBC] Key:", key.hex())
+    print("[CBC] Reused IV:", iv.hex())
     print(f"[CBC] Reused IV -> identical IV blocks? {c1_iv == c2_iv}")
     print(f"[CBC] Reused IV -> identical first ciphertext blocks? {c1_first_block == c2_first_block}")
-    print("[CBC] First ciphertext block (hex):", c1_first_block.hex())
+    print("[CBC] Ciphertext #1 blocks:")
+    for i in range(0, len(c1_body), BLOCK):
+        print(f"    C1[{i//BLOCK:02d}]: {c1_body[i:i+BLOCK].hex()}")
+    print("[CBC] Ciphertext #2 blocks:")
+    for i in range(0, len(c2_body), BLOCK):
+        print(f"    C2[{i//BLOCK:02d}]: {c2_body[i:i+BLOCK].hex()}")
     print("[CBC] Second ciphertext block differs?", c1_body[BLOCK:2*BLOCK] != c2_body[BLOCK:2*BLOCK])
 
     # Show the classic leakage equation for CBC with reused IV:
@@ -105,6 +118,8 @@ def demo_cbc_iv_reuse():
     dec = _AES.new(key, _AES.MODE_CBC, iv=bytes(tampered_iv)).decrypt(c2_body)
     tampered_first_block = dec[:BLOCK]
     print("[CBC] Bit-flip demo: P2'[0] differs from original P2[0]?", tampered_first_block != p2_first)
+    print("[CBC] Tampered first plaintext block:", tampered_first_block.hex())
+    print("[CBC] Original first plaintext block:", p2_first.hex())
 
 def demo_gcm_nonce_reuse():
     key = get_random_bytes(16)
@@ -114,7 +129,11 @@ def demo_gcm_nonce_reuse():
     p2 = b"GCM message two"
     n1, c1, t1 = aes_gcm_encrypt(key, p1, aad=aad, nonce=nonce)
     n2, c2, t2 = aes_gcm_encrypt(key, p2, aad=aad, nonce=nonce)
-    print(f"[GCM] Nonce reused -> tags equal? {t1 == t2}")
+    print("[GCM] Key:", key.hex())
+    print("[GCM] Nonce (reused):", nonce.hex())
+    print(f"[GCM] Tag #1: {t1.hex()} | Tag #2: {t2.hex()} | tags equal? {t1 == t2}")
+    print("[GCM] Ciphertext #1:", c1.hex())
+    print("[GCM] Ciphertext #2:", c2.hex())
     try:
         _ = aes_gcm_decrypt(key, n1, c1, t2, aad=aad)
         print("[GCM] Unexpectedly verified with wrong tag (should not happen).")
@@ -130,7 +149,12 @@ def roundtrip_checks():
     assert aes_cbc_decrypt(key, ctc) == msg
     nonce, ctg, tag = aes_gcm_encrypt(key, msg, aad=b"meta")
     assert aes_gcm_decrypt(key, nonce, ctg, tag, aad=b"meta") == msg
-    print("[Roundtrip] ECB, CBC, GCM all OK")
+    print("[Roundtrip] AES-128 key:", key.hex())
+    print("[Roundtrip] Plaintext length:", len(msg), "bytes")
+    print("[Roundtrip] ECB ciphertext (first 32 hex):", cte[:16].hex())
+    print("[Roundtrip] CBC IV:", ctc[:BLOCK].hex())
+    print("[Roundtrip] GCM nonce:", nonce.hex(), "tag:", tag.hex())
+    print("[Roundtrip] All modes decrypted back to the original message.")
 
 
 def demo_gcm_keystream_reuse_xor_leak():
@@ -157,6 +181,8 @@ def demo_gcm_keystream_reuse_xor_leak():
     # Keystream reuse property in CTR/GCM: C1 ^ C2 = P1 ^ P2
     leak_hex = xor_hex(ct1, ct2)
     expected_hex = xor_hex(p1, p2)
+    print("[GCM] Key:", key.hex())
+    print("[GCM] Nonce reused:", nonce.hex())
     print("[GCM] Keystream reuse: XOR(c1,c2) == XOR(p1,p2)?", leak_hex == expected_hex)
     print("[GCM] XOR(ct1, ct2):", leak_hex)
     print("[GCM] XOR(pt1, pt2):", expected_hex)
@@ -168,6 +194,7 @@ def demo_gcm_keystream_reuse_xor_leak():
     c2_mid = c2[start:end]
     recovered_p2_mid = bytes(a ^ b ^ c for (a, b, c) in zip(c1_mid, c2_mid, mid1))
     print("[GCM] Recover p2's middle given p1's middle:", recovered_p2_mid)
+    print("[GCM] p2 middle (expected):", mid2)
 
 
 if __name__ == "__main__":

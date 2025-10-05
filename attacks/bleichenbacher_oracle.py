@@ -308,13 +308,20 @@ def demo_oracle(use_fast: bool = False, bits: int = 96, e: int = 3):
             continue
     logger.info("Generated RSA modulus n with %d bits", n.bit_length())
     k = (n.bit_length() + 7) // 8
+    print(f"n ({n.bit_length()} bits): 0x{n:x}")
+    print(f"Public exponent e: {e}")
+    print(f"Private exponent d: 0x{d:x}")
+    print(f"Modulus length k: {k} bytes")
 
     pt = b"A"
     em = pkcs1v15_pad(pt, k)
     c = encrypt_int(i2osp(em), e, n)
+    print(f"Padded plaintext EM: {em.hex()}")
+    print(f"Ciphertext c: 0x{c:x}")
 
     print(f"Oracle says padding valid? {oracle_padding_valid(c, d, n, k)} (expected True)")
     c_bad = (c ^ 2) % n
+    print(f"Tampered ciphertext c_bad: 0x{c_bad:x}")
     print(f"Oracle says padding valid (tampered)? {oracle_padding_valid(c_bad, d, n, k)}")
 
     fast_cb = (lambda ct: oracle_padding_valid_prefix(ct, d, n, k)) if use_fast else None
