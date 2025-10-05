@@ -69,6 +69,22 @@ def test_rsa_roundtrip():
     assert ok and all(isinstance(value, int) for value in (n, e, d))
 
 
+def test_rsa_crt_equals_standard():
+    from rsa.rsa_from_scratch import (
+        decrypt_int,
+        decrypt_int_crt,
+        encrypt_int,
+        generate_key_with_crt,
+    )
+
+    n, e, d, p, q = generate_key_with_crt(bits=512)
+    for m in (1, 2, 42, 123456):
+        c = encrypt_int(m, e, n)
+        dec_std = decrypt_int(c, d, n)
+        dec_crt = decrypt_int_crt(c, d, n, p, q)
+        assert dec_std == m == dec_crt
+
+
 def test_bleichenbacher_fast_oracle():
     from attacks.bleichenbacher_oracle import demo_fast_oracle
 
