@@ -1,11 +1,22 @@
 import base64
 import os
+import secrets
 import tempfile
+from collections import Counter
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
+
+try:  # pragma: no cover - exercised indirectly via demos
+    import matplotlib.pyplot as plt
+except ModuleNotFoundError:  # pragma: no cover - fallback for environments without matplotlib
+    plt = None
+    _FALLBACK_PNG = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII="
+    )
+else:  # pragma: no cover - plotting is tested via smoke tests
+    _FALLBACK_PNG = None
 
 BLOCK = 16
 
@@ -69,6 +80,18 @@ def _render_gcm_keystream_heatmap(
     returns the resolved :class:`~pathlib.Path`.
     """
 
+    if plt is None:
+        if save_path is None:
+            tmp = tempfile.NamedTemporaryFile(prefix="gcm_leak_", suffix=".png", delete=False)
+            save_path = tmp.name
+            tmp.close()
+        path = Path(save_path).expanduser().resolve()
+        if _FALLBACK_PNG is not None:
+            path.write_bytes(_FALLBACK_PNG)
+        else:  # pragma: no cover - guard if fallback constant missing
+            path.write_bytes(b"")
+        return path
+
     data = [list(ct1), list(ct2), list(leak)]
     width = max(len(leak) / 4.0, 6)
     fig, ax = plt.subplots(figsize=(width, 2.8))
@@ -92,30 +115,43 @@ def _render_gcm_keystream_heatmap(
     plt.close(fig)
     return path
 
-def demo_ecb_pattern_leakage():
+def demo_ecb_pattern_leakage() -> dict[str, object]:
+    """Return metadata that highlights ECB's repeating-block leakage."""
+
     key = get_random_bytes(16)
     block = b"A" * 16
     pt = block * 4 + b"B" * 16 + block * 3
     ct = aes_ecb_encrypt(key, pt)
-    blocks = [ct[i:i + 16] for i in range(0, len(ct), 16)]
-    unique_blocks = len(set(blocks))
-    print("[ECB] Key:", key.hex())
-    print(f"[ECB] Total blocks: {len(blocks)}, unique blocks: {unique_blocks} (lower is worse)")
-    print("[ECB] Ciphertext block pattern:")
-    for idx, block_bytes in enumerate(blocks, start=1):
-        marker = "*" if blocks.count(block_bytes) > 1 else " "
-        print(f"    Block {idx:02d}{marker}: {block_bytes.hex()}")
-    print("[ECB] Repeated blocks (marked with * ) reveal the repeated plaintext pattern.")
+    blocks = [ct[i : i + BLOCK] for i in range(0, len(ct), BLOCK)]
+    counts = Counter(blocks)
+    block_data = [
+        {
+            "index": idx,
+            "hex": block_bytes.hex(),
+            "repeats": counts[block_bytes],
+        }
+        for idx, block_bytes in enumerate(blocks, start=1)
+    ]
+    return {
+        "key": key,
+        "plaintext": pt,
+        "ciphertext": ct,
+        "block_metadata": block_data,
+        "unique_blocks": len(counts),
+        "total_blocks": len(blocks),
+    }
 
-def demo_cbc_iv_reuse():
+def demo_cbc_iv_reuse() -> dict[str, object]:
+    """Return artefacts that demonstrate CBC IV reuse leakage."""
+
     key = get_random_bytes(16)
     iv = get_random_bytes(BLOCK)
 
     # Two plaintexts that share the same first block but diverge afterwards.
     shared_block = b"shared prefix bl"
     assert len(shared_block) == BLOCK
-    p1 = shared_block + b"ock -> amount=100" + os.urandom(5)
-    p2 = shared_block + b"ock -> amount=900" + os.urandom(5)
+    p1 = shared_block + b"ock -> amount=100" + secrets.token_bytes(5)
+    p2 = shared_block + b"ock -> amount=900" + secrets.token_bytes(5)
 
     c1 = aes_cbc_encrypt(key, p1, iv=iv)
     c2 = aes_cbc_encrypt(key, p2, iv=iv)
@@ -125,42 +161,35 @@ def demo_cbc_iv_reuse():
     c1_first_block = c1_body[:BLOCK]
     c2_first_block = c2_body[:BLOCK]
 
-    print("[CBC] Key:", key.hex())
-    print("[CBC] Reused IV:", iv.hex())
-    print(f"[CBC] Reused IV -> identical IV blocks? {c1_iv == c2_iv}")
-    print(f"[CBC] Reused IV -> identical first ciphertext blocks? {c1_first_block == c2_first_block}")
-    print("[CBC] Ciphertext #1 blocks:")
-    for i in range(0, len(c1_body), BLOCK):
-        print(f"    C1[{i//BLOCK:02d}]: {c1_body[i:i+BLOCK].hex()}")
-    print("[CBC] Ciphertext #2 blocks:")
-    for i in range(0, len(c2_body), BLOCK):
-        print(f"    C2[{i//BLOCK:02d}]: {c2_body[i:i+BLOCK].hex()}")
-    print("[CBC] Second ciphertext block differs?", c1_body[BLOCK:2*BLOCK] != c2_body[BLOCK:2*BLOCK])
-
-    # Show the classic leakage equation for CBC with reused IV:
-    # C1[0] ^ C2[0] == P1[0] ^ P2[0]
     p1_first = p1[:BLOCK]
     p2_first = p2[:BLOCK]
     x_c = bytes(a ^ b for a, b in zip(c1_first_block, c2_first_block))
     x_p = bytes(a ^ b for a, b in zip(p1_first, p2_first))
-    print("[CBC] XOR(C1[0], C2[0]) == XOR(P1[0], P2[0]) ?", x_c == x_p)
-    print("[CBC] XOR(C1[0], C2[0]):", x_c.hex())
-    print("[CBC] XOR(P1[0], P2[0]):", x_p.hex())
 
-    # Demonstrate bit-flipping attack on CBC first block via IV tampering
-    # Flip a bit in IV and decrypt c2 under the tampered IV;
-    # the corresponding bit in P2'[0] will flip.
     from Crypto.Cipher import AES as _AES
 
     tampered_iv = bytearray(c2_iv)
     tampered_iv[0] ^= 0x20  # flip one bit
     dec = _AES.new(key, _AES.MODE_CBC, iv=bytes(tampered_iv)).decrypt(c2_body)
     tampered_first_block = dec[:BLOCK]
-    print("[CBC] Bit-flip demo: P2'[0] differs from original P2[0]?", tampered_first_block != p2_first)
-    print("[CBC] Tampered first plaintext block:", tampered_first_block.hex())
-    print("[CBC] Original first plaintext block:", p2_first.hex())
 
-def demo_gcm_nonce_reuse():
+    return {
+        "key": key,
+        "iv": iv,
+        "plaintext_1": p1,
+        "plaintext_2": p2,
+        "ciphertext_1": c1,
+        "ciphertext_2": c2,
+        "xor_ciphertexts": x_c,
+        "xor_plaintexts": x_p,
+        "second_block_differs": c1_body[BLOCK : 2 * BLOCK] != c2_body[BLOCK : 2 * BLOCK],
+        "tampered_first_block": tampered_first_block,
+        "original_first_block": p2_first,
+    }
+
+def demo_gcm_nonce_reuse() -> dict[str, object]:
+    """Return ciphertext/tag artefacts for a nonce-reuse demonstration."""
+
     key = get_random_bytes(16)
     nonce = get_random_bytes(12)
     aad = b"hdr"
@@ -168,16 +197,24 @@ def demo_gcm_nonce_reuse():
     p2 = b"GCM message two"
     n1, c1, t1 = aes_gcm_encrypt(key, p1, aad=aad, nonce=nonce)
     n2, c2, t2 = aes_gcm_encrypt(key, p2, aad=aad, nonce=nonce)
-    print("[GCM] Key:", key.hex())
-    print("[GCM] Nonce (reused):", nonce.hex())
-    print(f"[GCM] Tag #1: {t1.hex()} | Tag #2: {t2.hex()} | tags equal? {t1 == t2}")
-    print("[GCM] Ciphertext #1:", c1.hex())
-    print("[GCM] Ciphertext #2:", c2.hex())
+    assert n1 == n2 == nonce
     try:
-        _ = aes_gcm_decrypt(key, n1, c1, t2, aad=aad)
-        print("[GCM] Unexpectedly verified with wrong tag (should not happen).")
-    except Exception as e:
-        print(f"[GCM] Verification with wrong tag failed as expected: {type(e).__name__}")
+        aes_gcm_decrypt(key, n1, c1, t2, aad=aad)
+    except Exception as exc:  # noqa: BLE001 - display the verification failure class
+        verification_error = type(exc).__name__
+    else:  # pragma: no cover - defensive guard for unexpected library behaviour
+        verification_error = None
+
+    return {
+        "key": key,
+        "nonce": nonce,
+        "ciphertext_1": c1,
+        "ciphertext_2": c2,
+        "tag_1": t1,
+        "tag_2": t2,
+        "tags_equal": t1 == t2,
+        "verification_error": verification_error,
+    }
 
 def roundtrip_demo():
     """Run a short AES round-trip across ECB, CBC and GCM.
@@ -228,7 +265,7 @@ def roundtrip_checks():
 
 def demo_gcm_keystream_reuse_xor_leak(
     save_path: str | os.PathLike[str] | None = None,
-):
+) -> dict[str, object]:
     key = get_random_bytes(16)
     nonce = get_random_bytes(12)  # BAD: reused nonce
     # Construct messages: identical except a middle slice differs
@@ -253,14 +290,8 @@ def demo_gcm_keystream_reuse_xor_leak(
     leak = bytes(a ^ b for a, b in zip(ct1, ct2))
     leak_hex = leak.hex()
     expected_hex = xor_hex(p1, p2)
-    print("[GCM] Key:", key.hex())
-    print("[GCM] Nonce reused:", nonce.hex())
-    print("[GCM] Keystream reuse: XOR(c1,c2) == XOR(p1,p2)?", leak_hex == expected_hex)
-    print("[GCM] XOR(ct1, ct2):", leak_hex)
-    print("[GCM] XOR(pt1, pt2):", expected_hex)
 
     plot_path = _render_gcm_keystream_heatmap(ct1, ct2, leak, save_path=save_path)
-    print(f"[GCM] Heatmap saved to: {plot_path}")
 
     # Show recovery of p2's differing middle when p1's middle is known
     start = len(prefix)
@@ -268,10 +299,9 @@ def demo_gcm_keystream_reuse_xor_leak(
     c1_mid = c1[start:end]
     c2_mid = c2[start:end]
     recovered_p2_mid = bytes(a ^ b ^ c for (a, b, c) in zip(c1_mid, c2_mid, mid1))
-    print("[GCM] Recover p2's middle given p1's middle:", recovered_p2_mid)
-    print("[GCM] p2 middle (expected):", mid2)
 
     return {
+        "key": key,
         "nonce": nonce,
         "ciphertext_1": c1,
         "ciphertext_2": c2,
@@ -286,8 +316,56 @@ def demo_gcm_keystream_reuse_xor_leak(
 if __name__ == "__main__":
     print("== AES Demos ==")
     roundtrip_checks()
-    demo_ecb_pattern_leakage()
-    demo_cbc_iv_reuse()
-    demo_gcm_nonce_reuse()
-    demo_gcm_keystream_reuse_xor_leak()
+    ecb_info = demo_ecb_pattern_leakage()
+    print("[ECB] Key:", ecb_info["key"].hex())
+    print(
+        f"[ECB] Total blocks: {ecb_info['total_blocks']}, unique blocks: {ecb_info['unique_blocks']} (lower is worse)"
+    )
+    print("[ECB] Ciphertext block pattern (repeats marked with *):")
+    for block in ecb_info["block_metadata"]:
+        marker = "*" if block["repeats"] > 1 else " "
+        print(f"    Block {block['index']:02d}{marker}: {block['hex']}")
+
+    cbc_info = demo_cbc_iv_reuse()
+    print("[CBC] Key:", cbc_info["key"].hex())
+    print("[CBC] Reused IV:", cbc_info["iv"].hex())
+    print("[CBC] Second ciphertext blocks differ?", cbc_info["second_block_differs"])
+    print(
+        "[CBC] XOR(C1[0], C2[0]) == XOR(P1[0], P2[0])?",
+        cbc_info["xor_ciphertexts"] == cbc_info["xor_plaintexts"],
+    )
+    print("[CBC] XOR(C1[0], C2[0]):", cbc_info["xor_ciphertexts"].hex())
+    print("[CBC] XOR(P1[0], P2[0]):", cbc_info["xor_plaintexts"].hex())
+    print(
+        "[CBC] Bit-flip changed first block?",
+        cbc_info["tampered_first_block"] != cbc_info["original_first_block"],
+    )
+    print("[CBC] Tampered P2'[0]:", cbc_info["tampered_first_block"].hex())
+    print("[CBC] Original P2[0]:", cbc_info["original_first_block"].hex())
+
+    gcm_info = demo_gcm_nonce_reuse()
+    print("[GCM] Key:", gcm_info["key"].hex())
+    print("[GCM] Nonce (reused):", gcm_info["nonce"].hex())
+    print(
+        f"[GCM] Tag #1: {gcm_info['tag_1'].hex()} | Tag #2: {gcm_info['tag_2'].hex()} | tags equal? {gcm_info['tags_equal']}"
+    )
+    if gcm_info["verification_error"]:
+        print(
+            "[GCM] Verification with wrong tag failed as expected:",
+            gcm_info["verification_error"],
+        )
+    else:
+        print("[GCM] WARNING: verification unexpectedly succeeded with wrong tag!")
+
+    leak_info = demo_gcm_keystream_reuse_xor_leak()
+    print("[GCM] Nonce reused:", leak_info["nonce"].hex())
+    print(
+        "[GCM] Keystream reuse equality?",
+        leak_info["leak_hex"] == leak_info["expected_hex"],
+    )
+    print("[GCM] XOR(ct1, ct2):", leak_info["leak_hex"])
+    print("[GCM] XOR(pt1, pt2):", leak_info["expected_hex"])
+    print("[GCM] Heatmap saved to:", leak_info["plot_path"])
+    print("[GCM] Recovered differing plaintext segment:", leak_info["recovered_mid"])
+    print("[GCM] Expected segment:", leak_info["expected_mid"])
     print("Done.")
