@@ -275,8 +275,8 @@ def pkcs1v15_unpad(em: bytes) -> bytes:
         raise ValueError("Invalid padding")
     return em[sep + 1:]
 
-def oracle_padding_valid(c: int, d: int, n: int, k: int) -> bool:
-    m = decrypt_int(c, d, n)
+def oracle_padding_valid(c: int, d: int, n: int, e: int, k: int) -> bool:
+    m = decrypt_int(c, d, n, e=e)
     em = os2ip(m, length=k)
     try:
         _ = pkcs1v15_unpad(em)
@@ -284,12 +284,12 @@ def oracle_padding_valid(c: int, d: int, n: int, k: int) -> bool:
     except ValueError:
         return False
 
-def oracle_padding_valid_prefix(c: int, d: int, n: int, k: int) -> bool:
+def oracle_padding_valid_prefix(c: int, d: int, n: int, e: int, k: int) -> bool:
     """
     Fast/loose oracle: only checks that EM begins with 0x00 0x02.
     This is NON-COMPLIANT and only for demo speed-ups.
     """
-    m = decrypt_int(c, d, n)
+    m = decrypt_int(c, d, n, e=e)
     em = os2ip(m, length=k)
     return len(em) >= 2 and em.startswith(b"\x00\x02")
 
@@ -319,18 +319,18 @@ def demo_oracle(use_fast: bool = False, bits: int = 96, e: int = 3):
     print(f"Padded plaintext EM: {em.hex()}")
     print(f"Ciphertext c: 0x{c:x}")
 
-    print(f"Oracle says padding valid? {oracle_padding_valid(c, d, n, k)} (expected True)")
+    print(f"Oracle says padding valid? {oracle_padding_valid(c, d, n, e, k)} (expected True)")
     c_bad = (c ^ 2) % n
     print(f"Tampered ciphertext c_bad: 0x{c_bad:x}")
-    print(f"Oracle says padding valid (tampered)? {oracle_padding_valid(c_bad, d, n, k)}")
+    print(f"Oracle says padding valid (tampered)? {oracle_padding_valid(c_bad, d, n, e, k)}")
 
-    fast_cb = (lambda ct: oracle_padding_valid_prefix(ct, d, n, k)) if use_fast else None
+    fast_cb = (lambda ct: oracle_padding_valid_prefix(ct, d, n, e, k)) if use_fast else None
     recovered = bleichenbacher_attack(
         c,
         e,
         n,
         k,
-        oracle=lambda ct: oracle_padding_valid(ct, d, n, k),
+        oracle=lambda ct: oracle_padding_valid(ct, d, n, e, k),
         fast_oracle=fast_cb,
     )
     logger.info("Attack completed")
@@ -357,9 +357,9 @@ def demo_fast_oracle(bits: int = 96, e: int = 3):
     def counting_oracle(ct: int) -> bool:
         nonlocal queries
         queries += 1
-        return oracle_padding_valid(ct, d, n, k)
+        return oracle_padding_valid(ct, d, n, e_pub, k)
 
-    fast_cb = lambda ct: oracle_padding_valid_prefix(ct, d, n, k)
+    fast_cb = lambda ct: oracle_padding_valid_prefix(ct, d, n, e_pub, k)
 
     recovered = bleichenbacher_attack(
         c,

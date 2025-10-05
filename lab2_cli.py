@@ -152,11 +152,11 @@ def _run_rsa_demo():
     line()
     print("== RSA Round-trip ==")
     # small demo using existing functions
-    n, e, d = generate_key(1024)
+    n, e, d = generate_key(2048)
     msg = b"hi rsa from CLI"
     m = i2osp(msg)
     c = encrypt_int(m, e, n)
-    dec = decrypt_int(c, d, n)
+    dec = decrypt_int(c, d, n, e=e)
     out = os2ip(dec)
     ok = (out == msg)
     modulus_preview = hex(n)[2:66] + ("…" if n.bit_length() > 256 else "")

@@ -73,7 +73,7 @@ def encrypt_to_file(
     out_path: str | Path,
     *,
     public_key: RsaPublicKey | None = None,
-    key_bits: int = 1024,
+    key_bits: int = 2048,
     store_private: bool = False,
 ) -> Tuple[RsaPublicKey, RsaPrivateKey | None]:
     """Encrypt *plaintext* with RSA and persist as JSON."""
@@ -167,7 +167,7 @@ def decrypt_from_file(
         raise ValueError("Ciphertext length does not match recorded modulus bytes")
 
     c_int = _bytes_to_int(ciphertext)
-    m_int = decrypt_int(c_int, private_key.d, private_key.n)
+    m_int = decrypt_int(c_int, private_key.d, private_key.n, e=e)
     plaintext_padded = _int_to_bytes(m_int, modulus_bytes)
     if plaintext_len > len(plaintext_padded):
         raise ValueError("Recorded plaintext length larger than recovered data")
@@ -181,14 +181,14 @@ def run_encrypt_console() -> None:
     plaintext_str = input("Enter plaintext: ")
     plaintext = plaintext_str.encode("utf-8")
 
-    key_bits_str = input("Key size in bits (default 1024): ").strip()
-    key_bits = 1024
+    key_bits_str = input("Key size in bits (default 2048): ").strip()
+    key_bits = 2048
     if key_bits_str:
         try:
             key_bits = int(key_bits_str)
         except ValueError:
-            print("Invalid key size; using 1024 bits.")
-            key_bits = 1024
+            print("Invalid key size; using 2048 bits.")
+            key_bits = 2048
         if key_bits < 256:
             print("Key size too small; using minimum 256 bits.")
             key_bits = max(256, key_bits)

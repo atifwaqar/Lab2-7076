@@ -68,7 +68,7 @@ def gen_prime(bits: int) -> int:
             return cand
 
 
-def generate_key(bits: int = 1024, e: int = 65537):
+def generate_key(bits: int = 2048, e: int = 65537):
     """Generate an RSA modulus ``n`` together with the public/secret exponents."""
 
     if e % 2 == 0:
@@ -117,7 +117,33 @@ def encrypt_int(m: int, e: int, n: int) -> int:
         raise ValueError("Message representative out of range")
     return pow(m, e, n)
 
-def decrypt_int(c: int, d: int, n: int) -> int:
+def decrypt_int(
+    c: int,
+    d: int,
+    n: int,
+    *,
+    e: int | None = None,
+    use_blinding: bool = True,
+) -> int:
+    """Compute ``c**d mod n`` with optional RSA blinding to reduce timing leakage."""
+
+    if not (0 <= c < n):
+        raise ValueError("Ciphertext representative out of range")
+
+    if use_blinding and e is not None:
+        # Randomize the ciphertext before the private exponentiation.  The
+        # blinding factor must be invertible modulo n so we resample until the
+        # greatest common divisor is 1.  This prevents timing side channels
+        # that would otherwise leak information about ``d``.
+        while True:
+            r = secrets.randbelow(n - 1) + 1  # 1 <= r < n
+            if egcd(r, n)[0] == 1:
+                break
+        blinded = (c * pow(r, e, n)) % n
+        m_blinded = pow(blinded, d, n)
+        r_inv = inv_mod(r, n)
+        return (m_blinded * r_inv) % n
+
     return pow(c, d, n)
 
 
@@ -134,17 +160,17 @@ def rsa_roundtrip(bits: int = 512) -> Tuple[int, int, int, bool]:
     msg = b"hi rsa"
     m = i2osp(msg)
     c = encrypt_int(m, e, n)
-    dec = decrypt_int(c, d, n)
+    dec = decrypt_int(c, d, n, e=e)
     out = os2ip(dec)
     return n, e, d, out == msg
 
 if __name__ == "__main__":
     print("== RSA from scratch ==")
-    n, e, d, ok = rsa_roundtrip(1024)
+    n, e, d, ok = rsa_roundtrip(2048)
     msg = b"hi rsa"
     m = i2osp(msg)
     c = encrypt_int(m, e, n)
-    dec = decrypt_int(c, d, n)
+    dec = decrypt_int(c, d, n, e=e)
     out = os2ip(dec)
     assert ok and out == msg, "Roundtrip failed"
     print(f"n bits: {n.bit_length()}, e: {e}, ok = {out == msg}")
