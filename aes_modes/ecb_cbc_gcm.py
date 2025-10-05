@@ -1,6 +1,9 @@
 import base64
 import os
+import tempfile
+from pathlib import Path
 
+import matplotlib.pyplot as plt
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
 
@@ -52,6 +55,42 @@ def aes_gcm_decrypt(key: bytes, nonce: bytes, ct: bytes, tag: bytes, aad: bytes 
     cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
     cipher.update(aad)
     return cipher.decrypt_and_verify(ct, tag)
+
+
+def _render_gcm_keystream_heatmap(
+    ct1: bytes,
+    ct2: bytes,
+    leak: bytes,
+    save_path: str | os.PathLike[str] | None = None,
+):
+    """Render a small heatmap that highlights the reuse leakage.
+
+    The function saves the figure to ``save_path`` (or a temporary file) and
+    returns the resolved :class:`~pathlib.Path`.
+    """
+
+    data = [list(ct1), list(ct2), list(leak)]
+    width = max(len(leak) / 4.0, 6)
+    fig, ax = plt.subplots(figsize=(width, 2.8))
+    im = ax.imshow(data, aspect="auto", cmap="magma", interpolation="nearest")
+    ax.set_title("GCM nonce reuse leakage (byte values)")
+    ax.set_xlabel("Ciphertext byte index")
+    ax.set_yticks(range(3))
+    ax.set_yticklabels(["Ciphertext 1", "Ciphertext 2", "XOR leak"])
+    ax.set_xticks(range(0, len(leak), max(1, len(leak) // 12)))
+    cbar = fig.colorbar(im, ax=ax, orientation="vertical")
+    cbar.set_label("Byte value")
+    fig.tight_layout()
+
+    if save_path is None:
+        tmp = tempfile.NamedTemporaryFile(prefix="gcm_leak_", suffix=".png", delete=False)
+        save_path = tmp.name
+        tmp.close()
+
+    path = Path(save_path).expanduser().resolve()
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return path
 
 def demo_ecb_pattern_leakage():
     key = get_random_bytes(16)
@@ -187,7 +226,9 @@ def roundtrip_checks():
     print("[Roundtrip] All modes decrypted back to the original message.")
 
 
-def demo_gcm_keystream_reuse_xor_leak():
+def demo_gcm_keystream_reuse_xor_leak(
+    save_path: str | os.PathLike[str] | None = None,
+):
     key = get_random_bytes(16)
     nonce = get_random_bytes(12)  # BAD: reused nonce
     # Construct messages: identical except a middle slice differs
@@ -209,13 +250,17 @@ def demo_gcm_keystream_reuse_xor_leak():
     ct2 = base64.b64decode(bundle2["ciphertext_b64"])
 
     # Keystream reuse property in CTR/GCM: C1 ^ C2 = P1 ^ P2
-    leak_hex = xor_hex(ct1, ct2)
+    leak = bytes(a ^ b for a, b in zip(ct1, ct2))
+    leak_hex = leak.hex()
     expected_hex = xor_hex(p1, p2)
     print("[GCM] Key:", key.hex())
     print("[GCM] Nonce reused:", nonce.hex())
     print("[GCM] Keystream reuse: XOR(c1,c2) == XOR(p1,p2)?", leak_hex == expected_hex)
     print("[GCM] XOR(ct1, ct2):", leak_hex)
     print("[GCM] XOR(pt1, pt2):", expected_hex)
+
+    plot_path = _render_gcm_keystream_heatmap(ct1, ct2, leak, save_path=save_path)
+    print(f"[GCM] Heatmap saved to: {plot_path}")
 
     # Show recovery of p2's differing middle when p1's middle is known
     start = len(prefix)
@@ -225,6 +270,17 @@ def demo_gcm_keystream_reuse_xor_leak():
     recovered_p2_mid = bytes(a ^ b ^ c for (a, b, c) in zip(c1_mid, c2_mid, mid1))
     print("[GCM] Recover p2's middle given p1's middle:", recovered_p2_mid)
     print("[GCM] p2 middle (expected):", mid2)
+
+    return {
+        "nonce": nonce,
+        "ciphertext_1": c1,
+        "ciphertext_2": c2,
+        "leak_hex": leak_hex,
+        "expected_hex": expected_hex,
+        "plot_path": str(plot_path),
+        "recovered_mid": recovered_p2_mid,
+        "expected_mid": mid2,
+    }
 
 
 if __name__ == "__main__":
