@@ -1,7 +1,7 @@
 """
 Minimal scaffold for Bleichenbacher's padding oracle attack (PKCS#1 v1.5).
 
-This file is OPTIONAL for higher grades. It provides:
+This file provides:
 
 * A toy RSA key
 * A padding/validation oracle that ONLY reveals padding-valid/invalid
