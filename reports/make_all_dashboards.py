@@ -82,7 +82,7 @@ def _invoke_dashboard(
 def make_all_dashboards() -> list[DashboardOutcome]:
     """Generate all dashboards, printing a summary and returning detailed results."""
 
-    out_dir = ensure_out_dir("out")
+    out_dir = ensure_out_dir("Visualizations")
     results: list[DashboardOutcome] = []
 
     if not HAS_MPL:
