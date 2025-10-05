@@ -4,8 +4,8 @@ This repository contains reference implementations for:
 - AES (ECB, CBC, GCM) using PyCryptodome + IV/nonce misuse demos
 - RSA from scratch (keygen, encrypt, decrypt) using only Python builtins
 - Diffie–Hellman (finite field) demo
-- ECDH using tinyec (with optional quick visualization)
-- (Optional) Bleichenbacher padding oracle attack scaffold
+- ECDH using tinyec (with quick visualization)
+- Bleichenbacher padding oracle attack scaffold
 
 ## Quickstart
 
