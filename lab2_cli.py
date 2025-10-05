@@ -128,8 +128,8 @@ def menu():
     print("  3) Diffie–Hellman (finite field) demo")
     print("  4) Elliptic-Curve DH (tinyec) demo")
     print("  5) Bleichenbacher padding-oracle scaffold (optional)")
-    print("  6) Run ALL (in order)")
-    print("  7) Entropy sanity checks")
+    print("  6) Entropy sanity checks")
+    print("  7) Run ALL (in order)")
     print("  0) Exit")
     return input("\nEnter choice: ").strip()
 
@@ -511,6 +511,7 @@ def run_all(wait_for_key: bool = False):
     run_dh(run_default=True)
     run_ecdh(run_default=True)
     run_bleichenbacher(run_default=True, fast_default=True)
+    run_entropy_checks(wait_for_key=False)
     print("All demos completed.")
     if wait_for_key:
         input("\nPress Enter to return to the main menu...")
@@ -563,9 +564,9 @@ def main():
         elif choice == "5":
             run_bleichenbacher()
         elif choice == "6":
-            run_all(wait_for_key=True)
-        elif choice == "7":
             run_entropy_checks()
+        elif choice == "7":
+            run_all(wait_for_key=True)
         elif choice == "0" or choice.lower() in {"q", "quit", "exit"}:
             print("Goodbye!")
             break
