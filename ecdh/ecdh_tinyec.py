@@ -1,5 +1,6 @@
 """ECDH demonstration using tinyec with visualisations of key steps."""
 
+import atexit
 import hashlib
 import os
 import secrets
@@ -9,6 +10,12 @@ import matplotlib.pyplot as plt
 from tinyec import ec, registry
 
 __all__ = ["validate_public_point", "ecdh_demo"]
+
+
+# Close any open matplotlib figures before the interpreter exits to avoid
+# Tkinter "can't delete Tcl command" warnings on some platforms (notably
+# Windows with the TkAgg backend) when running the demos non-interactively.
+atexit.register(lambda: plt.close("all"))
 
 
 # -------- helpers --------
