@@ -2,7 +2,9 @@
 
 * **ECB**: Shows block pattern leakage.
 * **CBC**: Properly generates a random IV per message; demo of IV reuse leakage.
-* **GCM**: AEAD mode; demo of nonce reuse failure and verification error.
+* **GCM**: AEAD mode; demo of nonce reuse failure, verification error, and a
+  heatmap that highlights the differing plaintext slice when keystreams are
+  reused.
 
 Run:
 
