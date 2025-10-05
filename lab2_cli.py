@@ -16,8 +16,14 @@ Usage:
 """
 
 from __future__ import annotations
+
 import argparse
+import pathlib
+import sys
 import textwrap
+
+# Ensure relative repo imports work even if executed from another directory.
+sys.path.insert(0, str(pathlib.Path(__file__).parent.resolve()))
 
 # --- Imports from your repo modules (ensure you run from repo root) ---
 # AES demos (functions already exist in aes_modes/ecb_cbc_gcm.py)
@@ -275,9 +281,11 @@ def parse_args():
           python lab2_cli.py --run all
         """),
     )
-    ap.add_argument("--run",
-        choices=["aes","rsa","dh","ecdh","bleichenbacher","all"],
-        help="Run a specific demo non-interactively.")
+    ap.add_argument(
+        "--run",
+        choices=["aes", "rsa", "dh", "ecdh", "bleichenbacher", "all"],
+        help="Run a specific demo non-interactively.",
+    )
     return ap.parse_args()
 
 def main():
@@ -285,9 +293,9 @@ def main():
     if args.run:
         mapping = {
             "aes": lambda: run_aes(run_default=True),
-            "rsa": run_rsa,
-            "dh": run_dh,
-            "ecdh": run_ecdh,
+            "rsa": lambda: run_rsa(run_default=True),
+            "dh": lambda: run_dh(run_default=True),
+            "ecdh": lambda: run_ecdh(run_default=True),
             "bleichenbacher": run_bleichenbacher,
             "all": run_all,
         }
