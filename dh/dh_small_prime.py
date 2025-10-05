@@ -38,6 +38,13 @@ def demo():
     s1 = derive_shared_secret(a, B, p)
     s2 = derive_shared_secret(b, A, p)
     assert s1 == s2
+    print(f"p (modulus) bits: {p.bit_length()} | generator g: {g}")
+    print(f"Alice private a: 0x{a:x}")
+    print(f"Bob private b: 0x{b:x}")
+    print(f"Alice public A = g^a mod p: 0x{A:x}")
+    print(f"Bob public B = g^b mod p: 0x{B:x}")
+    shared_hex = hex(s1)[2:66] + ("…" if s1.bit_length() > 256 else "")
+    print(f"Shared secret (head): 0x{shared_hex}")
     print("DH shared secret established with peer input validation.")
 
 if __name__ == "__main__":
