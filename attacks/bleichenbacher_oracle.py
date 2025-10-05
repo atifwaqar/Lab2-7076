@@ -10,8 +10,10 @@ This file provides:
 It runs and demonstrates the oracle behavior.
 """
 
+import logging
 import secrets
 import sys
+import time
 from math import gcd
 from pathlib import Path
 
@@ -20,6 +22,9 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - convenience for direct execution
     sys.path.append(str(Path(__file__).resolve().parents[1] / "rsa"))
     from rsa_from_scratch import generate_key, i2osp, os2ip, encrypt_int, decrypt_int
+
+
+logger = logging.getLogger(__name__)
 
 
 def bleichenbacher_attack(c0: int, e: int, n: int, k: int, oracle) -> bytes:
@@ -48,41 +53,123 @@ def bleichenbacher_attack(c0: int, e: int, n: int, k: int, oracle) -> bytes:
         return oracle(c_test)
 
     while True:
+        logger.info("Iteration %d: %d interval(s) remaining", i, len(M))
         if i == 1:
             # Step 2.a: search for the first valid s
             base = ceil_div(n, three_B)
             s = base
             limit = base + 5000
+            logger.info(
+                "Step 2a: searching for initial s starting at %d (limit %d)",
+                base,
+                limit,
+            )
+            attempts = 0
+            start = time.perf_counter()
             while s < limit:
+                attempts += 1
                 if query(s):
+                    logger.info(
+                        "Step 2a: found s=%d after %d attempts in %.3fs",
+                        s,
+                        attempts,
+                        time.perf_counter() - start,
+                    )
                     break
                 s += 1
             else:
+                logger.info(
+                    "Step 2a fallback: switching to random search after %d attempts",
+                    attempts,
+                )
+                start = time.perf_counter()
+                last_log = start
                 while True:
                     s = secrets.randbelow(n)
                     if s < base:
                         continue
+                    attempts += 1
                     if query(s):
+                        logger.info(
+                            "Step 2a fallback: found s=%d after total %d attempts in %.3fs",
+                            s,
+                            attempts,
+                            time.perf_counter() - start,
+                        )
                         break
+                    now = time.perf_counter()
+                    if attempts % 5000 == 0 or now - last_log >= 1.0:
+                        logger.info(
+                            "Step 2a fallback: still searching (attempts=%d, elapsed=%.3fs)",
+                            attempts,
+                            now - start,
+                        )
+                        last_log = now
         elif len(M) >= 2:
             # Step 2.b: when there are multiple intervals, incrementally search
+            start = time.perf_counter()
+            attempts = 0
             s += 1
+            last_log = start
             while not query(s):
+                attempts += 1
                 s += 1
+                now = time.perf_counter()
+                if attempts % 5000 == 0 or now - last_log >= 1.0:
+                    logger.info(
+                        "Step 2b: searching... attempts=%d elapsed=%.3fs",
+                        attempts,
+                        now - start,
+                    )
+                    last_log = now
+            logger.info(
+                "Step 2b: found s=%d after %d increments in %.3fs",
+                s,
+                attempts,
+                time.perf_counter() - start,
+            )
         else:
             # Step 2.c: single interval, use focused search on r
             a, b = M[0]
             r = ceil_div(2 * (b * s - two_B), n)
+            logger.info(
+                "Step 2c: focused search with initial r=%d for interval [%d, %d]",
+                r,
+                a,
+                b,
+            )
             while True:
                 s_low = ceil_div(two_B + r * n, b)
                 s_high = floor_div(three_B - 1 + r * n, a)
                 if s_low > s_high:
                     r += 1
                     continue
+                start = time.perf_counter()
+                attempts = 0
+                last_log = start
                 for s_candidate in range(s_low, s_high + 1):
+                    attempts += 1
                     if query(s_candidate):
                         s = s_candidate
+                        logger.info(
+                            "Step 2c: found s=%d within range [%d, %d] after %d attempts in %.3fs",
+                            s,
+                            s_low,
+                            s_high,
+                            attempts,
+                            time.perf_counter() - start,
+                        )
                         break
+                    now = time.perf_counter()
+                    if attempts % 2000 == 0 or now - last_log >= 1.0:
+                        logger.info(
+                            "Step 2c: searching range [%d, %d] (attempts=%d elapsed=%.3fs)",
+                            s_low,
+                            s_high,
+                            attempts,
+                            now - start,
+                        )
+                        last_log = now
                 else:
                     r += 1
                     continue
@@ -122,6 +209,11 @@ def bleichenbacher_attack(c0: int, e: int, n: int, k: int, oracle) -> bytes:
                 merged.append((start, end))
 
         M = merged
+        logger.info(
+            "Step 3: refined to %d interval(s); smallest width=%d", 
+            len(M),
+            min((b - a) for a, b in M),
+        )
 
         # Step 4: check if the interval collapsed
         if len(M) == 1:
@@ -129,6 +221,7 @@ def bleichenbacher_attack(c0: int, e: int, n: int, k: int, oracle) -> bytes:
             if a == b:
                 m = a
                 em = os2ip(m, length=k)
+                logger.info("Step 4: interval collapsed; recovered message.")
                 return pkcs1v15_unpad(em)
 
         i += 1
@@ -170,12 +263,19 @@ def oracle_padding_valid(c: int, d: int, n: int, k: int) -> bool:
         return False
 
 def demo_oracle():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(asctime)s] %(levelname)s %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
+    logger.info("Starting Bleichenbacher oracle demo")
     while True:
         try:
             n, e, d = generate_key(96, e=3)
             break
         except ValueError:
             continue
+    logger.info("Generated RSA modulus n with %d bits", n.bit_length())
     k = (n.bit_length() + 7) // 8
     pt = b"A"
     em = pkcs1v15_pad(pt, k)
@@ -192,6 +292,7 @@ def demo_oracle():
         k,
         lambda ct: oracle_padding_valid(ct, d, n, k),
     )
+    logger.info("Attack completed")
     print(f"Recovered plaintext: {recovered!r}")
     print(f"Success? {recovered == pt}")
 
