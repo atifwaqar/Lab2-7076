@@ -2,10 +2,25 @@ import secrets
 from typing import Tuple
 
 def egcd(a: int, b: int):
-    if b == 0:
-        return a, 1, 0
-    g, x1, y1 = egcd(b, a % b)
-    return g, y1, x1 - (a // b) * y1
+    """Extended Euclidean algorithm without recursion.
+
+    The original recursive implementation could exceed Python's recursion
+    depth when working with very large integers (such as the RSA blinding
+    factor ``r`` and modulus ``n``).  By rewriting the routine iteratively we
+    avoid hitting the recursion limit while computing the Bézout coefficients.
+    """
+
+    old_r, r = a, b
+    old_s, s = 1, 0
+    old_t, t = 0, 1
+
+    while r != 0:
+        q = old_r // r
+        old_r, r = r, old_r - q * r
+        old_s, s = s, old_s - q * s
+        old_t, t = t, old_t - q * t
+
+    return old_r, old_s, old_t
 
 def inv_mod(a: int, m: int) -> int:
     g, x, _ = egcd(a, m)
