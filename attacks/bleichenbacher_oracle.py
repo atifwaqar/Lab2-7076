@@ -10,7 +10,6 @@ This file provides:
 It runs and demonstrates the oracle behavior.
 """
 
-import math
 import secrets
 import sys
 from pathlib import Path
@@ -24,6 +23,12 @@ except ModuleNotFoundError:  # pragma: no cover - convenience for direct executi
 
 def bleichenbacher_attack(c0: int, e: int, n: int, k: int, oracle) -> bytes:
     """Recover the padded message using Bleichenbacher's adaptive attack."""
+
+    def ceil_div(num: int, den: int) -> int:
+        return -(-num // den)
+
+    def floor_div(num: int, den: int) -> int:
+        return num // den
 
     B = 1 << (8 * (k - 2))
     two_B = 2 * B
@@ -41,9 +46,10 @@ def bleichenbacher_attack(c0: int, e: int, n: int, k: int, oracle) -> bytes:
     while True:
         if i == 1:
             # Step 2.a: search for the first valid s
-            base = math.ceil(n / three_B)
+            base = ceil_div(n, three_B)
             s = base
-            while s < base + 5000:
+            limit = base + 5000
+            while s < limit:
                 if query(s):
                     break
                 s += 1
@@ -62,10 +68,10 @@ def bleichenbacher_attack(c0: int, e: int, n: int, k: int, oracle) -> bytes:
         else:
             # Step 2.c: single interval, use focused search on r
             a, b = M[0]
-            r = math.ceil((2 * (b * s - two_B)) / n)
+            r = ceil_div(2 * (b * s - two_B), n)
             while True:
-                s_low = math.ceil((two_B + r * n) / b)
-                s_high = math.floor((three_B - 1 + r * n) / a)
+                s_low = ceil_div(two_B + r * n, b)
+                s_high = floor_div(three_B - 1 + r * n, a)
                 if s_low > s_high:
                     r += 1
                     continue
@@ -81,16 +87,33 @@ def bleichenbacher_attack(c0: int, e: int, n: int, k: int, oracle) -> bytes:
         # Step 3: Narrow the set of intervals
         new_M = []
         for a, b in M:
-            r_min = math.ceil((a * s - three_B + 1) / n)
-            r_max = math.floor((b * s - two_B) / n)
+            r_min = ceil_div(a * s - three_B + 1, n)
+            r_max = floor_div(b * s - two_B, n)
             if r_min > r_max:
                 continue
             for r in range(r_min, r_max + 1):
-                new_a = max(a, math.ceil((two_B + r * n) / s))
-                new_b = min(b, math.floor((three_B - 1 + r * n) / s))
+                new_a = max(a, ceil_div(two_B + r * n, s))
+                new_b = min(b, floor_div(three_B - 1 + r * n, s))
                 if new_a <= new_b:
                     new_M.append((new_a, new_b))
-        M = new_M
+
+        if not new_M:
+            raise RuntimeError("Interval refinement failed – no candidates remain")
+
+        # Merge overlapping intervals to avoid an explosion in the candidate list.
+        new_M.sort()
+        merged: list[tuple[int, int]] = []
+        for start, end in new_M:
+            if not merged:
+                merged.append((start, end))
+                continue
+            prev_start, prev_end = merged[-1]
+            if start <= prev_end:
+                merged[-1] = (prev_start, max(prev_end, end))
+            else:
+                merged.append((start, end))
+
+        M = merged
 
         # Step 4: check if the interval collapsed
         if len(M) == 1:
