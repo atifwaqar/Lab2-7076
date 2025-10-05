@@ -73,11 +73,14 @@ def _render_gcm_keystream_heatmap(
     ct2: bytes,
     leak: bytes,
     save_path: str | os.PathLike[str] | None = None,
+    highlight: tuple[int, int] | None = None,
 ):
     """Render a small heatmap that highlights the reuse leakage.
 
     The function saves the figure to ``save_path`` (or a temporary file) and
-    returns the resolved :class:`~pathlib.Path`.
+    returns the resolved :class:`~pathlib.Path`.  When ``highlight`` is
+    provided, the byte-range (``start``, ``end``) is outlined to emphasise where
+    the known-plaintext slice differs between the two messages.
     """
 
     if plt is None:
@@ -103,6 +106,34 @@ def _render_gcm_keystream_heatmap(
     ax.set_xticks(range(0, len(leak), max(1, len(leak) // 12)))
     cbar = fig.colorbar(im, ax=ax, orientation="vertical")
     cbar.set_label("Byte value")
+
+    if highlight is not None:
+        start, end = highlight
+        if 0 <= start < end <= len(leak):
+            from matplotlib.patches import Rectangle
+
+            rect = Rectangle(
+                (start - 0.5, -0.5),
+                end - start,
+                len(data),
+                linewidth=1.5,
+                edgecolor="#f0ad4e",
+                facecolor="none",
+                linestyle="--",
+            )
+            ax.add_patch(rect)
+            ax.text(
+                start,
+                len(data) - 0.2,
+                "Differing plaintext slice",
+                color="#f0ad4e",
+                fontsize=9,
+                fontweight="bold",
+                ha="left",
+                va="top",
+                backgroundcolor="black",
+                alpha=0.6,
+            )
     fig.tight_layout()
 
     if save_path is None:
@@ -291,14 +322,17 @@ def demo_gcm_keystream_reuse_xor_leak(
     leak_hex = leak.hex()
     expected_hex = xor_hex(p1, p2)
 
-    plot_path = _render_gcm_keystream_heatmap(ct1, ct2, leak, save_path=save_path)
-
     # Show recovery of p2's differing middle when p1's middle is known
     start = len(prefix)
     end = start + len(mid1)
     c1_mid = c1[start:end]
     c2_mid = c2[start:end]
     recovered_p2_mid = bytes(a ^ b ^ c for (a, b, c) in zip(c1_mid, c2_mid, mid1))
+
+    highlight = (start, end)
+    plot_path = _render_gcm_keystream_heatmap(
+        ct1, ct2, leak, save_path=save_path, highlight=highlight
+    )
 
     return {
         "key": key,
@@ -308,6 +342,7 @@ def demo_gcm_keystream_reuse_xor_leak(
         "leak_hex": leak_hex,
         "expected_hex": expected_hex,
         "plot_path": str(plot_path),
+        "highlight_span": highlight,
         "recovered_mid": recovered_p2_mid,
         "expected_mid": mid2,
     }

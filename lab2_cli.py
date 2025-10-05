@@ -165,6 +165,12 @@ def _run_aes_demos():
     print(f"    XOR(ct1, ct2): {leak_data['leak_hex']}")
     print(f"    XOR(pt1, pt2): {leak_data['expected_hex']}")
     print(f"    Heatmap saved to: {leak_data['plot_path']}")
+    highlight = leak_data.get("highlight_span")
+    if highlight is not None:
+        start, end = highlight
+        print(
+            f"    Highlighted columns: [{start}, {end}) mark the differing plaintext segment."
+        )
     print(
         "    Recovered differing plaintext segment:",
         leak_data["recovered_mid"],
