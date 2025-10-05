@@ -351,7 +351,8 @@ def main():
             "dh": lambda: run_dh(run_default=True),
             "ecdh": lambda: run_ecdh(run_default=True),
             "bleichenbacher": lambda: run_bleichenbacher(run_default=True, fast_default=True),
-            "all": run_all,
+            # When running all demos non-interactively, still wait for the user before exiting.
+            "all": lambda: run_all(wait_for_key=True),
         }
         mapping[args.run]()
         return
