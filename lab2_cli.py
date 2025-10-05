@@ -638,80 +638,58 @@ def run_entropy_checks(*, wait_for_key: bool = True):
 def export_dashboards(*, wait_for_key: bool = True):
     console_ui.section("Export Dashboards (PNG)")
 
-    def _summarize(paths):
-        saved = {pathlib.Path(path).resolve() for path in paths}
-        specs = getattr(_dashboard_module, "_DASHBOARD_SPECS", ())
+    def _aggregate(results):
         summary = {}
-        for module_name, _, filename in specs:
-            resolved = (pathlib.Path("out") / filename).resolve()
-            status = "saved" if resolved in saved else "skipped"
-            reason = ""
-            if status == "skipped":
-                missing_tinyec = False
-                ecdh_error = globals().get("_ecdh_import_error")
-                if isinstance(ecdh_error, ModuleNotFoundError) and ecdh_error.name in {"tinyec", "matplotlib"}:
-                    missing_tinyec = True
-                if not _HAS_MPL or ("ecdh" in module_name and missing_tinyec):
-                    reason = "tinyec/matplotlib not installed"
-
-            existing = summary.get(resolved)
-            if existing is None or existing["status"] == "skipped" and status == "saved":
-                summary[resolved] = {"status": status, "reason": reason}
-            elif existing["status"] == "skipped" and not existing["reason"]:
-                summary[resolved]["reason"] = reason
+        for result in results:
+            resolved_target = pathlib.Path(result.target).resolve()
+            entry = summary.setdefault(
+                resolved_target,
+                {"status": "skipped", "reasons": set(), "output": None},
+            )
+            if result.status == "saved" and result.output is not None:
+                entry["status"] = "saved"
+                entry["output"] = pathlib.Path(result.output).resolve()
+                entry["reasons"].clear()
+            elif entry["status"] != "saved" and getattr(result, "reason", ""):
+                entry["reasons"].add(result.reason)
         return summary
 
-    if not _HAS_MPL:
-        console_ui.warning("matplotlib is not installed; skipping dashboard export.")
-        summary = _summarize([])
-        if summary:
-            console_ui.section("Summary")
-            for path in sorted(summary):
-                entry = summary[path]
-                suffix = (
-                    " (skipped: tinyec/matplotlib not installed)"
-                    if entry.get("reason")
-                    else " (skipped)"
-                )
-                print(f"  {path}{suffix}")
-        if wait_for_key:
-            input("\nPress Enter to return to the main menu...")
-        return []
-
     try:
-        paths = _dashboard_module.make_all_dashboards()
+        results = _dashboard_module.make_all_dashboards()
     except Exception as exc:  # pragma: no cover - runtime safeguard
         console_ui.error(f"Dashboard export failed: {exc}")
         if wait_for_key:
             input("\nPress Enter to return to the main menu...")
         return []
 
-    if paths:
+    saved_results = [res for res in results if getattr(res, "status", "") == "saved" and getattr(res, "output", None)]
+
+    if saved_results:
         console_ui.success("Saved dashboards:")
-        for path in paths:
-            print(f"  {pathlib.Path(path).resolve()}")
+        for result in saved_results:
+            print(f"  {pathlib.Path(result.output).resolve()}")
     else:
         console_ui.info("No dashboards were generated.")
 
-    summary = _summarize(paths)
+    summary = _aggregate(results)
     if summary:
         console_ui.section("Summary")
         for path in sorted(summary):
             entry = summary[path]
-            if entry["status"] == "saved":
-                print(f"  {path}")
+            if entry["status"] == "saved" and entry.get("output") is not None:
+                print(f"  {entry['output']}")
             else:
-                suffix = (
-                    " (skipped: tinyec/matplotlib not installed)"
-                    if entry.get("reason")
-                    else " (skipped)"
-                )
-                print(f"  {path}{suffix}")
+                reasons = entry["reasons"]
+                if reasons:
+                    reason_text = "; ".join(sorted(reasons))
+                    print(f"  {path} (skipped: {reason_text})")
+                else:
+                    print(f"  {path} (skipped)")
 
     if wait_for_key:
         input("\nPress Enter to return to the main menu...")
 
-    return paths
+    return [pathlib.Path(result.output) for result in saved_results]
 
 # Desired run_all output sample (for developers only):
 # [1/6] Preparing to run: AES Encryption Modes (ECB, CBC, GCM)
