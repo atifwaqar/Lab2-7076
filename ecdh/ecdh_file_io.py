@@ -13,6 +13,8 @@ from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
 from tinyec import registry
 
+from ecdh.ecdh_tinyec import validate_public_point
+
 
 @dataclass(frozen=True)
 class EcdhPrivate:
@@ -63,6 +65,8 @@ def encrypt_to_file(
     dB = randbelow(n - 1) + 1
     QA = dA * curve.g
     QB = dB * curve.g
+    validate_public_point(QA, curve)
+    validate_public_point(QB, curve)
     shared = dA * QB
 
     key = _derive_key(curve, shared)
@@ -143,6 +147,9 @@ def decrypt_from_file(
     # reconstruct points
     QA_point = curve.point(QA[0], QA[1])
     QB_point = curve.point(QB[0], QB[1])
+
+    validate_public_point(QA_point, curve)
+    validate_public_point(QB_point, curve)
 
     shared = private_scalar.value * QB_point
     key = _derive_key(curve, shared)

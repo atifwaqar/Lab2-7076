@@ -12,7 +12,12 @@ from typing import Any
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
 
-from dh.dh_small_prime import p as GROUP_P, g as GROUP_G
+from dh.dh_small_prime import (
+    derive_shared_secret,
+    g as GROUP_G,
+    p as GROUP_P,
+    validate_public_component,
+)
 
 
 @dataclass(frozen=True)
@@ -58,7 +63,9 @@ def encrypt_to_file(
     b = randbelow(GROUP_P - 2) + 1
     A = pow(GROUP_G, a, GROUP_P)
     B = pow(GROUP_G, b, GROUP_P)
-    shared = pow(B, a, GROUP_P)
+    validate_public_component(A, GROUP_P)
+    validate_public_component(B, GROUP_P)
+    shared = derive_shared_secret(a, B, GROUP_P)
 
     key = _derive_key(shared)
     nonce = get_random_bytes(12)
@@ -130,7 +137,9 @@ def decrypt_from_file(
             )
         private_value = DhPrivate(value=int(priv_in_file, 16))
 
-    shared = pow(B, private_value.value, GROUP_P)
+    validate_public_component(A, GROUP_P)
+    validate_public_component(B, GROUP_P)
+    shared = derive_shared_secret(private_value.value, B, GROUP_P)
 
     key = _derive_key(shared)
 
