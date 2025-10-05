@@ -1,4 +1,5 @@
 import secrets
+from typing import Tuple
 
 def egcd(a: int, b: int):
     if b == 0:
@@ -119,13 +120,31 @@ def encrypt_int(m: int, e: int, n: int) -> int:
 def decrypt_int(c: int, d: int, n: int) -> int:
     return pow(c, d, n)
 
-if __name__ == "__main__":
-    print("== RSA from scratch ==")
-    n, e, d = generate_key(1024)
+
+def rsa_roundtrip(bits: int = 512) -> Tuple[int, int, int, bool]:
+    """Generate a small RSA key and perform an encrypt/decrypt round-trip.
+
+    Returns the key parameters together with a boolean indicating whether the
+    decrypted plaintext matches the original message.  The helper keeps the
+    key size modest so smoke tests run quickly while still exercising the
+    number-theory utilities.
+    """
+
+    n, e, d = generate_key(bits)
     msg = b"hi rsa"
     m = i2osp(msg)
     c = encrypt_int(m, e, n)
     dec = decrypt_int(c, d, n)
     out = os2ip(dec)
-    assert out == msg, "Roundtrip failed"
+    return n, e, d, out == msg
+
+if __name__ == "__main__":
+    print("== RSA from scratch ==")
+    n, e, d, ok = rsa_roundtrip(1024)
+    msg = b"hi rsa"
+    m = i2osp(msg)
+    c = encrypt_int(m, e, n)
+    dec = decrypt_int(c, d, n)
+    out = os2ip(dec)
+    assert ok and out == msg, "Roundtrip failed"
     print(f"n bits: {n.bit_length()}, e: {e}, ok = {out == msg}")

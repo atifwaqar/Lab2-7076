@@ -337,5 +337,40 @@ def demo_oracle(use_fast: bool = False, bits: int = 96, e: int = 3):
     print(f"Recovered plaintext: {recovered!r}")
     print(f"Success? {recovered == pt}")
 
+
+def demo_fast_oracle(bits: int = 96, e: int = 3):
+    """Run the oracle demo with the fast prefix check and return stats."""
+
+    while True:
+        try:
+            n, e_pub, d = generate_key(bits, e=e)
+            break
+        except ValueError:
+            continue
+    k = (n.bit_length() + 7) // 8
+    pt = b"A"
+    em = pkcs1v15_pad(pt, k)
+    c = encrypt_int(i2osp(em), e_pub, n)
+
+    queries = 0
+
+    def counting_oracle(ct: int) -> bool:
+        nonlocal queries
+        queries += 1
+        return oracle_padding_valid(ct, d, n, k)
+
+    fast_cb = lambda ct: oracle_padding_valid_prefix(ct, d, n, k)
+
+    recovered = bleichenbacher_attack(
+        c,
+        e_pub,
+        n,
+        k,
+        oracle=counting_oracle,
+        fast_oracle=fast_cb,
+    )
+    return recovered == pt, queries
+
+
 if __name__ == "__main__":
     demo_oracle()
