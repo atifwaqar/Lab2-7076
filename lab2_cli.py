@@ -36,6 +36,7 @@ from aes_modes.ecb_cbc_gcm import (
     demo_gcm_keystream_reuse_xor_leak,
 )
 from aes_modes.aes_file_io import run_encrypt_console, run_decrypt_console
+from aes_modes.entropy_demo import run_entropy_demo
 
 # RSA: build a small roundtrip using the provided primitives
 from rsa.rsa_from_scratch import (
@@ -99,6 +100,7 @@ def menu():
     print("  4) Elliptic-Curve DH (tinyec) demo")
     print("  5) Bleichenbacher padding-oracle scaffold (optional)")
     print("  6) Run ALL (in order)")
+    print("  7) Entropy sanity checks")
     print("  0) Exit")
     return input("\nEnter choice: ").strip()
 
@@ -387,6 +389,15 @@ def run_bleichenbacher(
         else:
             print("Invalid choice. Please try again.\n")
 
+
+def run_entropy_checks():
+    line()
+    result = run_entropy_demo()
+    if result["flags"]["key_warn"] or result["flags"]["nonce_warn"]:
+        print("Warning: low-entropy sample detected above thresholds.")
+    line()
+    return result
+
 def run_all(wait_for_key: bool = False):
     run_aes(run_default=True)
     run_rsa(run_default=True)
@@ -410,7 +421,7 @@ def parse_args():
     )
     ap.add_argument(
         "--run",
-        choices=["aes", "rsa", "dh", "ecdh", "bleichenbacher", "all"],
+        choices=["aes", "rsa", "dh", "ecdh", "bleichenbacher", "entropy", "all"],
         help="Run a specific demo non-interactively.",
     )
     return ap.parse_args()
@@ -424,6 +435,7 @@ def main():
             "dh": lambda: run_dh(run_default=True),
             "ecdh": lambda: run_ecdh(run_default=True),
             "bleichenbacher": lambda: run_bleichenbacher(run_default=True, fast_default=True),
+            "entropy": lambda: run_entropy_checks(),
             # When running all demos non-interactively, still wait for the user before exiting.
             "all": lambda: run_all(wait_for_key=True),
         }
@@ -445,11 +457,13 @@ def main():
             run_bleichenbacher()
         elif choice == "6":
             run_all(wait_for_key=True)
+        elif choice == "7":
+            run_entropy_checks()
         elif choice == "0" or choice.lower() in {"q", "quit", "exit"}:
             print("Goodbye!")
             break
         else:
-            print("Invalid choice. Please select 0–6.")
+            print("Invalid choice. Please select 0–7.")
 
 if __name__ == "__main__":
     main()

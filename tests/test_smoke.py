@@ -104,3 +104,12 @@ def test_ecdh_hkdf_aead():
 
     out = ecdh_aead_demo()
     assert out.get("ok", False)
+
+
+def test_entropy_sanity():
+    from utils.entropy import shannon_entropy
+    import os
+
+    high = shannon_entropy(os.urandom(4096))
+    low = shannon_entropy(b"\x00" * 4096)
+    assert high > 7.5 and low < 1.0
