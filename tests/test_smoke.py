@@ -92,6 +92,14 @@ def test_bleichenbacher_fast_oracle():
     assert ok and iters > 0
 
 
+def test_bleichenbacher_complexity_plot(tmp_path):
+    from attacks.bleichenbacher_oracle import demo_with_plot
+
+    out = demo_with_plot(tmp_path / "bb_complexity.png")
+    assert out["ok"]
+    assert (tmp_path / "bb_complexity.png").exists()
+
+
 def test_dh_hkdf_aead():
     from dh.dh_small_prime import dh_aead_demo
 
