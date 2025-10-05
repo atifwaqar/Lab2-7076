@@ -244,22 +244,51 @@ def run_ecdh(run_default: bool = False):
         else:
             print("Invalid option. Choose 0-3.")
 
-def run_bleichenbacher():
+def run_bleichenbacher(run_default: bool = False, fast_default: bool = True):
     line()
     print("== Bleichenbacher Padding-Oracle (scaffold) ==")
+
     if bleichenbacher_demo is None:
-        print("Bleichenbacher demo not available (scaffold missing or import failed).")
-        print("If you plan to implement it, run: python attacks/bleichenbacher_oracle.py")
-    else:
-        bleichenbacher_demo()
-    line()
+        print("This demo is optional or missing dependencies.")
+        print("If you want to try it, make sure 'attacks/bleichenbacher_oracle.py' is present.")
+        line()
+        return
+
+    if run_default:
+        mode = "FAST" if fast_default else "SLOW"
+        print(f"[Auto] Running in {mode} mode...")
+        bleichenbacher_demo(use_fast=fast_default)
+        line()
+        return
+
+    while True:
+        print("Choose a mode:")
+        print("  1) Slow (strict PKCS#1 v1.5 oracle)")
+        print("  2) Fast (prefix-only oracle)")
+        print("  0) Back")
+        choice = input("\nEnter choice: ").strip()
+        if choice == "1":
+            print()
+            bleichenbacher_demo(use_fast=False)
+            line()
+            break
+        elif choice == "2":
+            print()
+            bleichenbacher_demo(use_fast=True)
+            line()
+            break
+        elif choice == "0":
+            line()
+            return
+        else:
+            print("Invalid choice. Please try again.\n")
 
 def run_all():
     run_aes(run_default=True)
     run_rsa(run_default=True)
     run_dh(run_default=True)
     run_ecdh(run_default=True)
-    run_bleichenbacher()
+    run_bleichenbacher(run_default=True, fast_default=True)
     print("All demos completed.")
 
 def parse_args():
@@ -288,7 +317,7 @@ def main():
             "rsa": lambda: run_rsa(run_default=True),
             "dh": lambda: run_dh(run_default=True),
             "ecdh": lambda: run_ecdh(run_default=True),
-            "bleichenbacher": run_bleichenbacher,
+            "bleichenbacher": lambda: run_bleichenbacher(run_default=True, fast_default=True),
             "all": run_all,
         }
         mapping[args.run]()

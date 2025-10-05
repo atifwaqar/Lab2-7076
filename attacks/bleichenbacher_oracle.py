@@ -285,11 +285,15 @@ def oracle_padding_valid(c: int, d: int, n: int, k: int) -> bool:
         return False
 
 def oracle_padding_valid_prefix(c: int, d: int, n: int, k: int) -> bool:
+    """
+    Fast/loose oracle: only checks that EM begins with 0x00 0x02.
+    This is NON-COMPLIANT and only for demo speed-ups.
+    """
     m = decrypt_int(c, d, n)
     em = os2ip(m, length=k)
     return len(em) >= 2 and em.startswith(b"\x00\x02")
 
-def demo_oracle():
+def demo_oracle(use_fast: bool = False, bits: int = 96, e: int = 3):
     logging.basicConfig(
         level=logging.INFO,
         format="[%(asctime)s] %(levelname)s %(name)s: %(message)s",
@@ -298,27 +302,29 @@ def demo_oracle():
     logger.info("Starting Bleichenbacher oracle demo")
     while True:
         try:
-            n, e, d = generate_key(90, e=3)
+            n, e, d = generate_key(bits, e=e)
             break
         except ValueError:
             continue
     logger.info("Generated RSA modulus n with %d bits", n.bit_length())
     k = (n.bit_length() + 7) // 8
+
     pt = b"A"
     em = pkcs1v15_pad(pt, k)
-    # bytes -> int conversion uses the project helper i2osp (bytes → int)
     c = encrypt_int(i2osp(em), e, n)
-    valid = oracle_padding_valid(c, d, n, k)
-    print(f"Oracle says padding valid? {valid} (expected True)")
+
+    print(f"Oracle says padding valid? {oracle_padding_valid(c, d, n, k)} (expected True)")
     c_bad = (c ^ 2) % n
     print(f"Oracle says padding valid (tampered)? {oracle_padding_valid(c_bad, d, n, k)}")
+
+    fast_cb = (lambda ct: oracle_padding_valid_prefix(ct, d, n, k)) if use_fast else None
     recovered = bleichenbacher_attack(
         c,
         e,
         n,
         k,
-        lambda ct: oracle_padding_valid(ct, d, n, k),
-        fast_oracle=lambda ct: oracle_padding_valid_prefix(ct, d, n, k),
+        oracle=lambda ct: oracle_padding_valid(ct, d, n, k),
+        fast_oracle=fast_cb,
     )
     logger.info("Attack completed")
     print(f"Recovered plaintext: {recovered!r}")
