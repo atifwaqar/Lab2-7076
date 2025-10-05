@@ -6,6 +6,10 @@ from typing import Iterable, Tuple
 import matplotlib.pyplot as plt
 from tinyec import ec, registry
 
+__all__ = [
+    "validate_public_point",
+]
+
 
 def _normalise_point(point, modulus: int) -> Tuple[float, float]:
     """Project a point in the finite field onto [0, 1] for plotting."""
@@ -66,7 +70,7 @@ def _plot_key_exchange(curve, qa, qb, shared_point) -> None:
     ax.legend()
 
 
-def _validate_public_point(point, curve) -> None:
+def validate_public_point(point, curve) -> None:
     """Validate a peer's public point before using it in ECDH."""
 
     if isinstance(point, ec.Inf) or point is None:
@@ -93,8 +97,8 @@ def demo():
     dB = secrets.randbelow(n - 1) + 1
     QA = dA * curve.g
     QB = dB * curve.g
-    _validate_public_point(QA, curve)
-    _validate_public_point(QB, curve)
+    validate_public_point(QA, curve)
+    validate_public_point(QB, curve)
     S1 = dA * QB
     S2 = dB * QA
     assert S1.x == S2.x and S1.y == S2.y
