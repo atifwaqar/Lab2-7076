@@ -27,7 +27,14 @@ except ModuleNotFoundError:  # pragma: no cover - convenience for direct executi
 logger = logging.getLogger(__name__)
 
 
-def bleichenbacher_attack(c0: int, e: int, n: int, k: int, oracle) -> bytes:
+def bleichenbacher_attack(
+    c0: int,
+    e: int,
+    n: int,
+    k: int,
+    oracle,
+    fast_oracle=None,
+) -> bytes:
     """Recover the padded message using Bleichenbacher's adaptive attack."""
 
     def ceil_div(num: int, den: int) -> int:
@@ -47,12 +54,22 @@ def bleichenbacher_attack(c0: int, e: int, n: int, k: int, oracle) -> bytes:
     rounds = 0
     MAX_ROUNDS = 200_000  # safety guard for demos
 
-    def query(s_candidate: int) -> bool:
+    fast_mode = fast_oracle is not None
+
+    def query(s_candidate: int, *, fast: bool = False) -> bool:
         # ensure s is invertible mod n (s ∈ Z*_n)
         if gcd(s_candidate, n) != 1:
             return False
         c_test = (c0 * pow(s_candidate, e, n)) % n
+        if fast and fast_mode:
+            return fast_oracle(c_test)
         return oracle(c_test)
+
+    if fast_mode:
+        logger.info(
+            "Fast oracle enabled: Step 2 uses prefix-only padding checks before"
+            " switching back to the strict oracle."
+        )
 
     while True:
         rounds += 1
@@ -64,7 +81,7 @@ def bleichenbacher_attack(c0: int, e: int, n: int, k: int, oracle) -> bytes:
             # Step 2.a: search for the first valid s
             base = ceil_div(n, three_B)
             s = base
-            limit = base + 5000
+            limit = base + 40000
             logger.info(
                 "Step 2a: searching for initial s starting at %d (limit %d)",
                 base,
@@ -74,7 +91,7 @@ def bleichenbacher_attack(c0: int, e: int, n: int, k: int, oracle) -> bytes:
             start = time.perf_counter()
             while s < limit:
                 attempts += 1
-                if query(s):
+                if query(s, fast=True):
                     logger.info(
                         "Step 2a: found s=%d after %d attempts in %.3fs",
                         s,
@@ -92,7 +109,7 @@ def bleichenbacher_attack(c0: int, e: int, n: int, k: int, oracle) -> bytes:
                 start = time.perf_counter()
                 more = 0
                 last_log = start
-                while not query(s):
+                while not query(s, fast=True):
                     s += 1
                     more += 1
                     now = time.perf_counter()
@@ -116,7 +133,7 @@ def bleichenbacher_attack(c0: int, e: int, n: int, k: int, oracle) -> bytes:
             attempts = 0
             s += 1
             last_log = start
-            while not query(s):
+            while not query(s, fast=True):
                 attempts += 1
                 s += 1
                 now = time.perf_counter()
@@ -267,6 +284,11 @@ def oracle_padding_valid(c: int, d: int, n: int, k: int) -> bool:
     except ValueError:
         return False
 
+def oracle_padding_valid_prefix(c: int, d: int, n: int, k: int) -> bool:
+    m = decrypt_int(c, d, n)
+    em = os2ip(m, length=k)
+    return len(em) >= 2 and em.startswith(b"\x00\x02")
+
 def demo_oracle():
     logging.basicConfig(
         level=logging.INFO,
@@ -276,7 +298,7 @@ def demo_oracle():
     logger.info("Starting Bleichenbacher oracle demo")
     while True:
         try:
-            n, e, d = generate_key(96, e=3)
+            n, e, d = generate_key(90, e=3)
             break
         except ValueError:
             continue
@@ -296,6 +318,7 @@ def demo_oracle():
         n,
         k,
         lambda ct: oracle_padding_valid(ct, d, n, k),
+        fast_oracle=lambda ct: oracle_padding_valid_prefix(ct, d, n, k),
     )
     logger.info("Attack completed")
     print(f"Recovered plaintext: {recovered!r}")
