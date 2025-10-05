@@ -4,7 +4,7 @@ import secrets
 from typing import Iterable, Tuple
 
 import matplotlib.pyplot as plt
-from tinyec import registry
+from tinyec import ec, registry
 
 
 def _normalise_point(point, modulus: int) -> Tuple[float, float]:
@@ -66,6 +66,26 @@ def _plot_key_exchange(curve, qa, qb, shared_point) -> None:
     ax.legend()
 
 
+def _validate_public_point(point, curve) -> None:
+    """Validate a peer's public point before using it in ECDH."""
+
+    if isinstance(point, ec.Inf) or point is None:
+        raise ValueError("Peer public point must not be the point at infinity.")
+
+    if not isinstance(point, ec.Point):
+        raise TypeError("Peer public point must be a tinyec Point instance.")
+
+    if point.curve is not curve:
+        raise ValueError("Peer public point is not defined over the expected curve.")
+
+    if not getattr(point, "on_curve", False):
+        raise ValueError("Peer public point is not on the curve.")
+
+    subgroup_order = getattr(curve.field, "n", None)
+    if subgroup_order and not isinstance(point * subgroup_order, ec.Inf):
+        raise ValueError("Peer public point failed the subgroup membership check.")
+
+
 def demo():
     curve = registry.get_curve("secp256r1")
     n = curve.field.n
@@ -73,6 +93,8 @@ def demo():
     dB = secrets.randbelow(n - 1) + 1
     QA = dA * curve.g
     QB = dB * curve.g
+    _validate_public_point(QA, curve)
+    _validate_public_point(QB, curve)
     S1 = dA * QB
     S2 = dB * QA
     assert S1.x == S2.x and S1.y == S2.y
