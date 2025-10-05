@@ -29,6 +29,21 @@ except ModuleNotFoundError:  # pragma: no cover - convenience for direct executi
 logger = logging.getLogger(__name__)
 
 
+def estimate_bleich_calls(bits: int) -> tuple[int, int]:
+    """Return a toy estimate for Bleichenbacher oracle queries.
+
+    The estimate intentionally mirrors the explosive growth of adaptive
+    padding-oracle attacks while remaining inexpensive to compute.  It scales
+    sub-exponentially with the modulus size so that small toy key sizes remain
+    within a demonstrable range.
+    """
+
+    clamped_bits = max(0, int(bits))
+    min_calls = max(1, int(2 ** (clamped_bits / 16)))
+    max_calls = max(min_calls, int(2 ** (clamped_bits / 8)))
+    return min_calls, max_calls
+
+
 @dataclass
 class IterationStats:
     """Telemetry for a single Bleichenbacher iteration."""
