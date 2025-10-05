@@ -85,6 +85,9 @@ except Exception:
     bleichenbacher_demo = None
 
 from utils import console_ui
+from utils.plotting import HAS_MPL as _HAS_MPL
+
+from reports import make_all_dashboards as _dashboard_module
 
 _RSA_PADDING_NOTE_PRINTED = False
 _IN_RUN_ALL = False
@@ -130,6 +133,7 @@ def menu():
     print("  5) Bleichenbacher padding-oracle scaffold (optional)")
     print("  6) Entropy sanity checks")
     print("  7) Run ALL (in order)")
+    print("  8) Export dashboards (PNG)")
     print("  0) Exit")
     return input("\nEnter choice: ").strip()
 
@@ -630,6 +634,36 @@ def run_entropy_checks(*, wait_for_key: bool = True):
         input("\nPress Enter to return to the main menu...")
     return result
 
+
+def export_dashboards(*, wait_for_key: bool = True):
+    console_ui.section("Export Dashboards (PNG)")
+
+    if not _HAS_MPL:
+        console_ui.warning("matplotlib is not installed; skipping dashboard export.")
+        if wait_for_key:
+            input("\nPress Enter to return to the main menu...")
+        return []
+
+    try:
+        paths = _dashboard_module.make_all_dashboards()
+    except Exception as exc:  # pragma: no cover - runtime safeguard
+        console_ui.error(f"Dashboard export failed: {exc}")
+        if wait_for_key:
+            input("\nPress Enter to return to the main menu...")
+        return []
+
+    if paths:
+        console_ui.success("Saved dashboards:")
+        for path in paths:
+            print(f"  {pathlib.Path(path).resolve()}")
+    else:
+        console_ui.info("No dashboards were generated.")
+
+    if wait_for_key:
+        input("\nPress Enter to return to the main menu...")
+
+    return paths
+
 # Desired run_all output sample (for developers only):
 # [1/6] Preparing to run: AES Encryption Modes (ECB, CBC, GCM)
 # ================================================================================
@@ -737,11 +771,13 @@ def main():
             run_entropy_checks()
         elif choice == "7":
             run_all(wait_for_key=True)
+        elif choice == "8":
+            export_dashboards()
         elif choice == "0" or choice.lower() in {"q", "quit", "exit"}:
             print("Goodbye!")
             break
         else:
-            print("Invalid choice. Please select 0–7.")
+            print("Invalid choice. Please select 0–8.")
 
 if __name__ == "__main__":
     main()
