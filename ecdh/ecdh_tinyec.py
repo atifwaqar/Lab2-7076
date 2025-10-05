@@ -33,6 +33,7 @@ __all__ = [
     "derive_symmetric_key",
     "ecdh_aead_demo",
     "save_ecdh_visualization",
+    "make_ecdh_visualization",
 ]
 
 
@@ -274,6 +275,12 @@ def save_ecdh_visualization(save_path: str | Path) -> Path:
     fig.savefig(save_path, dpi=200)
     plt.close(fig)
     return save_path
+
+
+def make_ecdh_visualization(save_path: str | Path) -> Path:
+    """Generate the ECDH visualisation expected by the demo harness."""
+
+    return save_ecdh_visualization(save_path)
 
 def _x_bytes(curve, P):
     coord_size = (curve.field.p.bit_length() + 7) // 8
