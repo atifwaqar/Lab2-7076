@@ -19,6 +19,8 @@ from __future__ import annotations
 import argparse
 import textwrap
 
+import pyfiglet
+
 # --- Imports from your repo modules (ensure you run from repo root) ---
 # AES demos (functions already exist in aes_modes/ecb_cbc_gcm.py)
 from aes_modes.ecb_cbc_gcm import (
@@ -66,15 +68,7 @@ try:
 except Exception:
     bleichenbacher_demo = None
 
-BANNER = r"""
-  _          _        __     ___  
- | |        | |       \ \   / / | 
- | |     ___| |__   ___\ \_/ /| | 
- | |    / __| '_ \ / _ \\   / | | 
- | |____\__ \ | | |  __/ | |  | | 
- |______|___/_| |_|\___| |_|  |_|   Lab 2 — Crypto Demos
-
-"""
+BANNER = pyfiglet.figlet_format("Lab2 - Crypto Demos")
 
 def line():
     print("-" * 70)
