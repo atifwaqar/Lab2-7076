@@ -314,13 +314,15 @@ def run_bleichenbacher(run_default: bool = False, fast_default: bool = True):
         else:
             print("Invalid choice. Please try again.\n")
 
-def run_all():
+def run_all(wait_for_key: bool = False):
     run_aes(run_default=True)
     run_rsa(run_default=True)
     run_dh(run_default=True)
     run_ecdh(run_default=True)
     run_bleichenbacher(run_default=True, fast_default=True)
     print("All demos completed.")
+    if wait_for_key:
+        input("\nPress Enter to return to the main menu...")
 
 def parse_args():
     ap = argparse.ArgumentParser(
@@ -368,7 +370,7 @@ def main():
         elif choice == "5":
             run_bleichenbacher()
         elif choice == "6":
-            run_all()
+            run_all(wait_for_key=True)
         elif choice == "0" or choice.lower() in {"q", "quit", "exit"}:
             print("Goodbye!")
             break
