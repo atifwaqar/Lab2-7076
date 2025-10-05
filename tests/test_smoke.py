@@ -74,3 +74,17 @@ def test_bleichenbacher_fast_oracle():
 
     ok, iters = demo_fast_oracle()
     assert ok and iters > 0
+
+
+def test_dh_hkdf_aead():
+    from dh.dh_small_prime import dh_aead_demo
+
+    out = dh_aead_demo()
+    assert out["ok"] and isinstance(out["nonce"], bytes) and isinstance(out["tag"], bytes)
+
+
+def test_ecdh_hkdf_aead():
+    from ecdh.ecdh_tinyec import ecdh_aead_demo
+
+    out = ecdh_aead_demo()
+    assert out.get("ok", False)
