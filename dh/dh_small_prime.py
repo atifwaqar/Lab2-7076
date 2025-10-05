@@ -3,15 +3,35 @@ import secrets
 p = 208351617316091241234326746312124448251235562226470491514186331217050270460481
 g = 2
 
+
+def _validate_public_component(component: int, modulus: int) -> None:
+    """Basic peer validation before Diffie–Hellman exponentiation."""
+
+    if not isinstance(component, int):
+        raise TypeError("Public component must be an integer.")
+
+    if not (1 < component < modulus - 1):
+        raise ValueError("Peer public component is out of the valid range (1, p-1).")
+
+
+def _derive_shared_secret(private_key: int, peer_public: int, modulus: int) -> int:
+    """Derive the shared secret after validating the peer's public contribution."""
+
+    _validate_public_component(peer_public, modulus)
+    return pow(peer_public, private_key, modulus)
+
+
 def demo():
     a = secrets.randbelow(p - 2) + 1
     b = secrets.randbelow(p - 2) + 1
     A = pow(g, a, p)
     B = pow(g, b, p)
-    s1 = pow(B, a, p)
-    s2 = pow(A, b, p)
+    _validate_public_component(A, p)
+    _validate_public_component(B, p)
+    s1 = _derive_shared_secret(a, B, p)
+    s2 = _derive_shared_secret(b, A, p)
     assert s1 == s2
-    print("DH shared secret established. (Only equality checked; do not print secrets.)")
+    print("DH shared secret established with peer input validation.")
 
 if __name__ == "__main__":
     demo()
