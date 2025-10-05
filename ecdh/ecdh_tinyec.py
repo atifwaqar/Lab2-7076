@@ -4,7 +4,8 @@ import atexit
 import hashlib
 import os
 import secrets
-from typing import Iterable, Tuple
+import warnings
+from typing import Callable, Iterable, Tuple
 
 import matplotlib.pyplot as plt
 from tinyec import ec, registry
@@ -153,6 +154,42 @@ def _demo_keys():
     return curve, dA, dB, QA, QB, S1, S2
 
 
+def _forge_point_off_curve(curve):
+    """Craft a point with valid-looking coordinates that is not on the curve."""
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        point = ec.Point(curve, int(curve.g.x), (int(curve.g.y) + 1) % curve.field.p)
+
+    # tinyec sets the ``on_curve`` attribute during construction; assert for clarity.
+    assert not getattr(point, "on_curve", True), "forged point unexpectedly on the curve"
+    return point
+
+
+def _demo_validation_failures(curve) -> None:
+    """Show how malformed peer points are rejected by the validator."""
+
+    rogue_curve = registry.get_curve("secp256k1")
+    test_cases: Iterable[Tuple[str, Callable[[], ec.Point]]] = [
+        ("the point at infinity", lambda: curve.g * curve.field.n),
+        (
+            "a point from a different curve (secp256k1)",
+            lambda: rogue_curve.g,
+        ),
+        ("coordinates that do not satisfy the curve equation", lambda: _forge_point_off_curve(curve)),
+    ]
+
+    print("[ECDH] Demonstrating parameter validation failures:")
+    for description, factory in test_cases:
+        try:
+            candidate = factory()
+            validate_public_point(candidate, curve)
+        except Exception as exc:  # noqa: BLE001 - we want to display the precise failure reason
+            print(f"    - Rejected {description}: {exc}")
+        else:  # pragma: no cover - defensive guard during demonstrations
+            print(f"    - Unexpectedly accepted {description}; validation needs investigation")
+
+
 def ecdh_demo() -> str:
     """Return the SHA-256 digest of the ECDH shared point's x-coordinate."""
 
@@ -173,6 +210,7 @@ def demo():
     print(f"[ECDH] Alice public QA: (x=0x{int(QA.x):x}, y=0x{int(QA.y):x})")
     print(f"[ECDH] Bob public QB: (x=0x{int(QB.x):x}, y=0x{int(QB.y):x})")
     print(f"[ECDH] Shared point S: (x=0x{int(S1.x):x}, y=0x{int(S1.y):x})")
+    _demo_validation_failures(curve)
 
     samples = [k * curve.g for k in range(1, 11)]
     _plot_curve_samples(curve, samples)
