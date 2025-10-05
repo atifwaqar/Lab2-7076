@@ -18,7 +18,7 @@ Briefly state goals: implement AES modes (ECB/CBC/GCM), RSA, DH, ECDH, and (opti
 * **CBC IV reuse**: first-block relation leaks structure; show C1 ⊕ C1'.
 * **GCM nonce reuse**: tag/verification issues and keystream reuse risks.
 * **RSA**: correctness checks, key sizes, performance notes.
-* **(EC)DH**: successful shared secret equality.
+* **(EC)DH**: successful shared secret equality and explicit rejection of invalid peer points (infinity, wrong curve, malformed coordinates).
 * **Oracle**: demonstrates how a padding-only leak violates IND-CCA.
 
 ## Key Entropy & Best Practices
