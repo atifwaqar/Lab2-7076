@@ -495,11 +495,13 @@ def run_bleichenbacher(
             print("Invalid choice. Please try again.\n")
 
 
-def run_entropy_checks():
+def run_entropy_checks(*, wait_for_key: bool = True):
     line()
     result = run_entropy_demo()
     if result["flags"]["key_warn"] or result["flags"]["nonce_warn"]:
         print("Warning: low-entropy sample detected above thresholds.")
+    if wait_for_key:
+        input("\nPress Enter to return to the main menu...")
     line()
     return result
 
@@ -540,7 +542,7 @@ def main():
             "dh": lambda: run_dh(run_default=True),
             "ecdh": lambda: run_ecdh(run_default=True),
             "bleichenbacher": lambda: run_bleichenbacher(run_default=True, fast_default=True),
-            "entropy": lambda: run_entropy_checks(),
+            "entropy": lambda: run_entropy_checks(wait_for_key=False),
             # When running all demos non-interactively, still wait for the user before exiting.
             "all": lambda: run_all(wait_for_key=True),
         }
