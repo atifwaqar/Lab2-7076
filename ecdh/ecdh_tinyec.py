@@ -8,7 +8,7 @@ from typing import Iterable, Tuple
 import matplotlib.pyplot as plt
 from tinyec import ec, registry
 
-__all__ = ["validate_public_point"]
+__all__ = ["validate_public_point", "ecdh_demo"]
 
 
 # -------- helpers --------
@@ -123,7 +123,7 @@ def _sanity_checks(curve, dA, dB, QA, QB, S1, S2):
 
 # -------- demo --------
 
-def demo():
+def _demo_keys():
     curve = registry.get_curve("secp256r1")
     n = curve.field.n
 
@@ -143,6 +143,20 @@ def demo():
 
     S1 = dA * QB
     S2 = dB * QA
+    return curve, dA, dB, QA, QB, S1, S2
+
+
+def ecdh_demo() -> str:
+    """Return the SHA-256 digest of the ECDH shared point's x-coordinate."""
+
+    curve, dA, dB, QA, QB, S1, S2 = _demo_keys()
+    _sanity_checks(curve, dA, dB, QA, QB, S1, S2)
+    digest = hashlib.sha256(_x_bytes(curve, S1)).hexdigest()
+    return digest
+
+
+def demo():
+    curve, dA, dB, QA, QB, S1, S2 = _demo_keys()
     _sanity_checks(curve, dA, dB, QA, QB, S1, S2)
     modulus_bits = curve.field.p.bit_length()
     print(f"[ECDH] Curve: {curve.name} (p={modulus_bits} bits)")

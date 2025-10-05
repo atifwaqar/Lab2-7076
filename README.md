@@ -46,6 +46,7 @@ python lab2_cli.py --run dh
 python lab2_cli.py --run ecdh
 python lab2_cli.py --run bleichenbacher
 python lab2_cli.py --run all
+pytest          # run the smoke-test suite
 ```
 
 ### Run modules directly (optional)

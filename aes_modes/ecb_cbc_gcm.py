@@ -140,15 +140,45 @@ def demo_gcm_nonce_reuse():
     except Exception as e:
         print(f"[GCM] Verification with wrong tag failed as expected: {type(e).__name__}")
 
-def roundtrip_checks():
+def roundtrip_demo():
+    """Run a short AES round-trip across ECB, CBC and GCM.
+
+    Returns a dictionary with the ciphertext artefacts and boolean flags
+    confirming that each mode decrypted to the original plaintext.  The
+    structure is intentionally simple so tests can assert on the booleans
+    without parsing printed output.
+    """
+
     key = get_random_bytes(16)
     msg = b"hello world! " * 5
     cte = aes_ecb_encrypt(key, msg)
-    assert aes_ecb_decrypt(key, cte) == msg
+    ok_ecb = aes_ecb_decrypt(key, cte) == msg
     ctc = aes_cbc_encrypt(key, msg)
-    assert aes_cbc_decrypt(key, ctc) == msg
+    ok_cbc = aes_cbc_decrypt(key, ctc) == msg
     nonce, ctg, tag = aes_gcm_encrypt(key, msg, aad=b"meta")
-    assert aes_gcm_decrypt(key, nonce, ctg, tag, aad=b"meta") == msg
+    ok_gcm = aes_gcm_decrypt(key, nonce, ctg, tag, aad=b"meta") == msg
+    return {
+        "key": key,
+        "plaintext": msg,
+        "ecb_ct": cte,
+        "cbc_iv_ct": ctc,
+        "gcm_nonce": nonce,
+        "gcm_ct": ctg,
+        "gcm_tag": tag,
+        "ok_ecb": ok_ecb,
+        "ok_cbc": ok_cbc,
+        "ok_gcm": ok_gcm,
+    }
+
+
+def roundtrip_checks():
+    result = roundtrip_demo()
+    key = result["key"]
+    msg = result["plaintext"]
+    cte = result["ecb_ct"]
+    ctc = result["cbc_iv_ct"]
+    nonce = result["gcm_nonce"]
+    tag = result["gcm_tag"]
     print("[Roundtrip] AES-128 key:", key.hex())
     print("[Roundtrip] Plaintext length:", len(msg), "bytes")
     print("[Roundtrip] ECB ciphertext (first 32 hex):", cte[:16].hex())
