@@ -50,6 +50,7 @@ def bleichenbacher_attack(
     fast_oracle=None,
     *,
     return_trace: bool = False,
+    interval_widths: list[int] | None = None,
 ) -> bytes | tuple[bytes, Sequence[IterationStats]]:
     """Recover the padded message using Bleichenbacher's adaptive attack.
 
@@ -263,6 +264,8 @@ def bleichenbacher_attack(
 
         M = merged
         min_width = min((b - a) for a, b in M)
+        if interval_widths is not None:
+            interval_widths.append(min_width)
         if return_trace:
             telemetry.append(
                 IterationStats(
@@ -500,6 +503,72 @@ def demo_fast_oracle(bits: int = 96, e: int = 3):
         fast_oracle=fast_cb,
     )
     return recovered == pt, queries
+
+
+def demo_with_plot(save_path) -> dict:
+    """
+    Run the (fast) padding-oracle attack, record interval width per iteration,
+    and save a simple line plot to `save_path` (PNG).
+    Returns: {"ok": bool, "iterations": int, "plot_path": Path}
+    """
+
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    save_path = Path(save_path)
+
+    while True:
+        try:
+            n, e_pub, d = generate_key(96, e=3)
+            break
+        except ValueError:
+            continue
+
+    k = (n.bit_length() + 7) // 8
+    pt = b"A"
+    em = pkcs1v15_pad(pt, k)
+    c = encrypt_int(i2osp(em), e_pub, n)
+
+    widths: list[int] = []
+
+    def counting_oracle(ct: int) -> bool:
+        return oracle_padding_valid(ct, d, n, e_pub, k, use_blinding=False)
+
+    fast_cb = lambda ct: oracle_padding_valid_prefix(
+        ct, d, n, e_pub, k, use_blinding=False
+    )
+
+    recovered = bleichenbacher_attack(
+        c,
+        e_pub,
+        n,
+        k,
+        oracle=counting_oracle,
+        fast_oracle=fast_cb,
+        interval_widths=widths,
+    )
+
+    iterations = len(widths)
+    ok = recovered == pt
+
+    fig, ax = plt.subplots(figsize=(6.0, 3.6))
+    x = list(range(1, iterations + 1))
+    y = widths
+    ax.plot(x, y, marker="o", linewidth=1.4)
+    ax.set_xlabel("Iteration")
+    ax.set_ylabel("Interval width |b - a|")
+    if y and min(y) > 0:
+        ax.set_yscale("log")
+    ax.set_title("Bleichenbacher interval widths")
+    ax.grid(True, which="both", linestyle="--", linewidth=0.5, alpha=0.6)
+
+    fig.tight_layout()
+    fig.savefig(save_path, bbox_inches="tight")
+    plt.close(fig)
+
+    return {"ok": ok, "iterations": iterations, "plot_path": save_path}
 
 
 if __name__ == "__main__":
