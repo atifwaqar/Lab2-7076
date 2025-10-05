@@ -1,10 +1,13 @@
 """ECDH demonstration using tinyec with visualisations of key steps."""
 
+from __future__ import annotations
+
 import atexit
 import hashlib
 import os
 import secrets
 import warnings
+from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Tuple
 
 try:  # pragma: no cover - fallback used in headless test environments
@@ -24,7 +27,13 @@ from utils.hkdf import hkdf_sha256
 
 HAS_TINYEC = ec is not None
 
-__all__ = ["validate_public_point", "ecdh_demo", "derive_symmetric_key", "ecdh_aead_demo"]
+__all__ = [
+    "validate_public_point",
+    "ecdh_demo",
+    "derive_symmetric_key",
+    "ecdh_aead_demo",
+    "save_ecdh_visualization",
+]
 
 
 # Close any open matplotlib figures before the interpreter exits to avoid
@@ -102,6 +111,169 @@ def _plot_key_exchange(curve, qa, qb, shared_point) -> None:
     _set_axes(ax)
     ax.legend()
     fig.tight_layout()
+
+
+def save_ecdh_visualization(save_path: str | Path) -> Path:
+    """Create a four-panel ECDH visualisation and save it to ``save_path``."""
+
+    if plt is None or not HAS_TINYEC:
+        raise RuntimeError("tinyec not installed")
+
+    save_path = Path(save_path)
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+
+    fig, axes = plt.subplots(2, 2, figsize=(11, 9))
+
+    # --- Top-left: finite-field EC points ---
+    ax_points = axes[0, 0]
+    p = 17
+    a = 2
+    b = 2
+    finite_points = [
+        (x, y)
+        for x in range(p)
+        for y in range(p)
+        if (y * y - (x * x * x + a * x + b)) % p == 0
+    ]
+    xs, ys = zip(*finite_points)
+    ax_points.scatter(xs, ys, c="#4c72b0", s=50)
+    ax_points.set_title(r"$y^2 = x^3 + 2x + 2$  (mod 17)")
+    ax_points.set_xlabel("x")
+    ax_points.set_ylabel("y")
+    ax_points.set_xticks(range(p))
+    ax_points.set_yticks(range(p))
+    ax_points.set_xlim(-0.5, p - 0.5)
+    ax_points.set_ylim(-0.5, p - 0.5)
+    ax_points.set_aspect("equal", adjustable="box")
+    ax_points.grid(True, linestyle=":", linewidth=0.6, alpha=0.5)
+
+    # Helpers for arithmetic on the toy finite-field curve.
+    def _inv_mod(k: int) -> int:
+        return pow(k, -1, p)
+
+    def _point_add(P: Tuple[int, int] | None, Q: Tuple[int, int] | None) -> Tuple[int, int] | None:
+        if P is None:
+            return Q
+        if Q is None:
+            return P
+        x1, y1 = P
+        x2, y2 = Q
+        if x1 == x2 and (y1 + y2) % p == 0:
+            return None
+        if P == Q:
+            denom = (2 * y1) % p
+            if denom == 0:
+                return None
+            m = ((3 * x1 * x1 + a) * _inv_mod(denom)) % p
+        else:
+            denom = (x2 - x1) % p
+            if denom == 0:
+                return None
+            m = ((y2 - y1) * _inv_mod(denom)) % p
+        x3 = (m * m - x1 - x2) % p
+        y3 = (m * (x1 - x3) - y1) % p
+        return (x3, y3)
+
+    def _scalar_mul(k: int, P: Tuple[int, int] | None) -> Tuple[int, int] | None:
+        result: Tuple[int, int] | None = None
+        addend = P
+        while k > 0:
+            if k & 1:
+                result = _point_add(result, addend)
+            addend = _point_add(addend, addend)
+            k >>= 1
+        return result
+
+    G = (5, 1)
+
+    # --- Top-right: scalar ladder ---
+    ax_ladder = axes[0, 1]
+    ladder_points: List[Tuple[int, Tuple[int, int]]] = []
+    for k in range(1, 8):
+        point = _scalar_mul(k, G)
+        if point is None:
+            break
+        ladder_points.append((k, point))
+    markers = ["o", "s", "^", "D", "v", "P", "X"]
+    for idx, (k, (x_val, y_val)) in enumerate(ladder_points):
+        marker = markers[idx % len(markers)]
+        ax_ladder.scatter(x_val, y_val, marker=marker, s=90, label=f"{k}·G")
+    ax_ladder.set_title("Scalar multiples of G")
+    ax_ladder.set_xlabel("x")
+    ax_ladder.set_ylabel("y")
+    ax_ladder.set_xlim(-0.5, p - 0.5)
+    ax_ladder.set_ylim(-0.5, p - 0.5)
+    ax_ladder.set_xticks(range(p))
+    ax_ladder.set_yticks(range(p))
+    ax_ladder.set_aspect("equal", adjustable="box")
+    ax_ladder.grid(True, linestyle=":", linewidth=0.6, alpha=0.5)
+    ax_ladder.legend(loc="upper right", fontsize="small")
+
+    # --- Bottom-left: continuous curve ---
+    import math
+
+    ax_continuous = axes[1, 0]
+    xs_continuous: List[float] = []
+    ys_pos: List[float] = []
+    ys_neg: List[float] = []
+    for step in range(-400, 401):
+        x_val = step / 80.0
+        rhs = x_val ** 3 + 7
+        if rhs < 0:
+            continue
+        y_val = math.sqrt(rhs)
+        xs_continuous.append(x_val)
+        ys_pos.append(y_val)
+        ys_neg.append(-y_val)
+    ax_continuous.plot(xs_continuous, ys_pos, color="#55a868", linewidth=2)
+    ax_continuous.plot(xs_continuous, ys_neg, color="#55a868", linewidth=2)
+    ax_continuous.set_title(r"$y^2 = x^3 + 7$ (real curve intuition)")
+    ax_continuous.set_xlabel("x")
+    ax_continuous.set_ylabel("y")
+    ax_continuous.grid(True, linestyle=":", linewidth=0.6, alpha=0.5)
+
+    # --- Bottom-right: ECDH key exchange ---
+    ax_ecdh = axes[1, 1]
+    d_a = 2
+    d_b = 7
+    q_a = _scalar_mul(d_a, G)
+    q_b = _scalar_mul(d_b, G)
+    shared_a = _scalar_mul(d_a, q_b)
+
+    if q_a is None or q_b is None or shared_a is None:
+        raise RuntimeError("tinyec not installed")
+
+    ax_ecdh.scatter(*G, color="#000000", marker="x", s=120, label="Generator G")
+    ax_ecdh.scatter(*q_a, color="#dd8452", s=90, label="Alice public")
+    ax_ecdh.scatter(*q_b, color="#55a868", s=90, label="Bob public")
+    ax_ecdh.scatter(
+        *shared_a,
+        color="#c44e52",
+        marker="*",
+        s=160,
+        label="Shared secret",
+        edgecolor="k",
+    )
+    ax_ecdh.annotate("G", G, textcoords="offset points", xytext=(6, 6))
+    ax_ecdh.annotate("QA", q_a, textcoords="offset points", xytext=(6, -12))
+    ax_ecdh.annotate("QB", q_b, textcoords="offset points", xytext=(6, -12))
+    ax_ecdh.annotate("S", shared_a, textcoords="offset points", xytext=(6, 6))
+    ax_ecdh.set_title("ECDH key agreement on toy curve")
+    ax_ecdh.set_xlabel("x")
+    ax_ecdh.set_ylabel("y")
+    ax_ecdh.set_xlim(-0.5, p - 0.5)
+    ax_ecdh.set_ylim(-0.5, p - 0.5)
+    ax_ecdh.set_xticks(range(p))
+    ax_ecdh.set_yticks(range(p))
+    ax_ecdh.set_aspect("equal", adjustable="box")
+    ax_ecdh.grid(True, linestyle=":", linewidth=0.6, alpha=0.5)
+    ax_ecdh.legend(loc="upper right", fontsize="small")
+
+    fig.suptitle("Elliptic Curve Cryptography Visualization", fontsize=16)
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
+    fig.savefig(save_path, dpi=200)
+    plt.close(fig)
+    return save_path
 
 def _x_bytes(curve, P):
     coord_size = (curve.field.p.bit_length() + 7) // 8
