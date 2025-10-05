@@ -2,4 +2,4 @@ pycryptodome
 tinyec
 matplotlib
 pyfiglet
-matplotlib
+numpy
