@@ -5,7 +5,7 @@ import hashlib
 import os
 import secrets
 import warnings
-from typing import Callable, Iterable, List, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Tuple
 
 try:  # pragma: no cover - fallback used in headless test environments
     import matplotlib.pyplot as plt
@@ -17,9 +17,14 @@ except ModuleNotFoundError:  # pragma: no cover - provide fallback demo without 
     ec = None  # type: ignore[assignment]
     registry = None  # type: ignore[assignment]
 
+from Crypto.Cipher import AES
+from Crypto.Random import get_random_bytes
+
+from utils.hkdf import hkdf_sha256
+
 HAS_TINYEC = ec is not None
 
-__all__ = ["validate_public_point", "ecdh_demo"]
+__all__ = ["validate_public_point", "ecdh_demo", "derive_symmetric_key", "ecdh_aead_demo"]
 
 
 # Close any open matplotlib figures before the interpreter exits to avoid
@@ -101,6 +106,15 @@ def _plot_key_exchange(curve, qa, qb, shared_point) -> None:
 def _x_bytes(curve, P):
     coord_size = (curve.field.p.bit_length() + 7) // 8
     return int(P.x).to_bytes(coord_size, "big")
+
+
+# -------- hkdf helpers --------
+
+def derive_symmetric_key(shared_x: int, *, length: int = 16) -> bytes:
+    """Derive an AES key from ECDH shared X coordinate via HKDF-SHA256."""
+
+    sx = shared_x.to_bytes(32, "big")
+    return hkdf_sha256(sx, info=b"lab2-ecdh-aead", length=length)
 
 
 # -------- validation --------
@@ -245,6 +259,41 @@ def ecdh_demo() -> str:
     _sanity_checks(curve, dA, dB, QA, QB, S1, S2)
     digest = hashlib.sha256(_x_bytes(curve, S1)).hexdigest()
     return digest
+
+
+def ecdh_aead_demo() -> Dict[str, Any]:
+    """Run an ECDH exchange, derive an AES-GCM key, and perform an authenticated roundtrip."""
+
+    if not HAS_TINYEC:
+        return {"ok": True, "skipped": True}
+
+    curve, dA, dB, QA, QB, S1, S2 = _demo_keys()
+    _sanity_checks(curve, dA, dB, QA, QB, S1, S2)
+
+    shared_x = int(S1.x)
+    key = derive_symmetric_key(shared_x)
+    nonce = get_random_bytes(12)
+    aad = b"lab2-ecdh-aad"
+    plaintext = b"Lab2 ECDH HKDF AES-GCM"
+
+    encryptor = AES.new(key, AES.MODE_GCM, nonce=nonce)
+    encryptor.update(aad)
+    ciphertext, tag = encryptor.encrypt_and_digest(plaintext)
+
+    decryptor = AES.new(key, AES.MODE_GCM, nonce=nonce)
+    decryptor.update(aad)
+    try:
+        recovered = decryptor.decrypt_and_verify(ciphertext, tag)
+    except ValueError:
+        return {"ok": False, "nonce": nonce, "ct": ciphertext, "tag": tag, "aad": aad}
+
+    return {
+        "ok": recovered == plaintext,
+        "nonce": nonce,
+        "ct": ciphertext,
+        "tag": tag,
+        "aad": aad,
+    }
 
 
 def demo():

@@ -1,5 +1,11 @@
 import hashlib
 import secrets
+from typing import Any, Dict
+
+from Crypto.Cipher import AES
+from Crypto.Random import get_random_bytes
+
+from utils.hkdf import hkdf_sha256
 
 p = 208351617316091241234326746312124448251235562226470491514186331217050270460481
 g = 2
@@ -9,6 +15,7 @@ __all__ = [
     "g",
     "validate_public_component",
     "derive_shared_secret",
+    "dh_aead_demo",
 ]
 
 
@@ -59,6 +66,44 @@ def dh_demo():
     digest_a = hashlib.sha256(shared_a.to_bytes(k, "big")).hexdigest()
     digest_b = hashlib.sha256(shared_b.to_bytes(k, "big")).hexdigest()
     return digest_a, digest_b
+
+
+def dh_aead_demo() -> Dict[str, Any]:
+    """Perform DH, derive an AES-GCM key via HKDF, and verify authenticated encryption."""
+
+    values = _demo_exchange()
+    shared_secret = values["shared_a"]
+    secret_len = (p.bit_length() + 7) // 8
+    shared_bytes = shared_secret.to_bytes(secret_len, "big")
+    key = hkdf_sha256(shared_bytes, info=b"lab2-dh-aead", length=16)
+    nonce = get_random_bytes(12)
+    aad = b"lab2-dh-aad"
+    plaintext = b"Lab2 DH HKDF AES-GCM"
+
+    encryptor = AES.new(key, AES.MODE_GCM, nonce=nonce)
+    encryptor.update(aad)
+    ciphertext, tag = encryptor.encrypt_and_digest(plaintext)
+
+    decryptor = AES.new(key, AES.MODE_GCM, nonce=nonce)
+    decryptor.update(aad)
+    try:
+        recovered = decryptor.decrypt_and_verify(ciphertext, tag)
+    except ValueError:
+        return {
+            "ok": False,
+            "nonce": nonce,
+            "ct": ciphertext,
+            "tag": tag,
+            "aad": aad,
+        }
+
+    return {
+        "ok": recovered == plaintext,
+        "nonce": nonce,
+        "ct": ciphertext,
+        "tag": tag,
+        "aad": aad,
+    }
 
 
 def demo():
