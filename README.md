@@ -102,10 +102,6 @@ requirements.txt
 * Windows venv activation: `.\.venv\Scripts\activate`.
 * If running from outside the repo root, the CLI injects the repo path; still, running from root is recommended.
 
-## Report
-
-Write your analysis in `report/lab2_report.md`.
-
 ## License
 
 This project is provided for educational purposes as part of a cryptography lab. If you adapt it, credit the original authors/instructors as required by your course policies.
