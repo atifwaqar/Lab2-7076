@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple, TYPE_CHECKING
 
 HAS_MPL = False
 plt = None  # type: ignore[assignment]
@@ -17,7 +17,12 @@ except Exception:  # pragma: no cover - optional dependency missing
     plt = None  # type: ignore[assignment]
 
 
-def ensure_out_dir(pathlike) -> Path:
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from matplotlib.axes import Axes
+    from matplotlib.figure import Figure
+
+
+def ensure_out_dir(pathlike: str | Path) -> Path:
     """Ensure the given directory exists and return it as a Path."""
     path = Path(pathlike)
     path.mkdir(parents=True, exist_ok=True)
@@ -33,7 +38,7 @@ if HAS_MPL:  # pragma: no cover - tiny wrapper around matplotlib
         fig, ax = plt.subplots(figsize=figsize)
         return fig, ax
 
-    def save(fig: Figure, path) -> Path:
+    def save(fig: Figure, path: str | Path) -> Path:
         """Save the figure to *path* (parent directories created automatically)."""
         target = Path(path)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -41,10 +46,11 @@ if HAS_MPL:  # pragma: no cover - tiny wrapper around matplotlib
         plt.close(fig)
         return target
 
-    def wide_grid(rows: int, cols: int):
+    def wide_grid(rows: int, cols: int) -> Tuple[Figure, Tuple[Tuple[Axes, ...], ...]]:
         """Create a grid of subplots suitable for dashboard-style layouts."""
         fig, axes = plt.subplots(rows, cols, figsize=(cols * 5.5, rows * 3.5), squeeze=False)
-        return fig, axes
+        grid = tuple(tuple(row) for row in axes)
+        return fig, grid
 
     def nice_axes(
         ax: Axes,
@@ -63,21 +69,26 @@ if HAS_MPL:  # pragma: no cover - tiny wrapper around matplotlib
 
 else:  # pragma: no cover - exercised when matplotlib is unavailable
 
-    def new_figure(figsize: Tuple[float, float] = (16, 12)):
+    def new_figure(figsize: Tuple[float, float] = (16, 12)) -> Tuple[None, None]:
         """Fallback that returns (None, None) when matplotlib is absent."""
         return None, None
 
-    def save(fig, path) -> Path:
+    def save(fig: Any, path: str | Path) -> Path:
         """Fallback save that simply ensures the destination directory exists."""
         target = Path(path)
         target.parent.mkdir(parents=True, exist_ok=True)
         return target
 
-    def wide_grid(rows: int, cols: int):
+    def wide_grid(rows: int, cols: int) -> Tuple[None, None]:
         """Fallback that returns (None, None) when matplotlib is absent."""
         return None, None
 
-    def nice_axes(ax, title: str, xlabel: Optional[str] = None, ylabel: Optional[str] = None):
+    def nice_axes(
+        ax: Any,
+        title: str,
+        xlabel: Optional[str] = None,
+        ylabel: Optional[str] = None,
+    ) -> Any:
         """Fallback that performs no styling when matplotlib is absent."""
         return ax
 

@@ -14,14 +14,14 @@ def _ensure_path(path: str | Path) -> Path:
 
 
 def make_performance_dashboard(save_path: str | Path) -> Path:
-    """Create an illustrative dashboard covering perf/security trade-offs."""
+    """Generate the performance trade-off dashboard and save to PNG."""
     target = _ensure_path(save_path)
 
     if not HAS_MPL:
         return target
 
     fig, axes = wide_grid(2, 2)
-    fig.suptitle("Cryptographic Performance and Security Trade-offs")
+    fig.suptitle("Cryptographic Performance and Security Trade-offs (illustrative)")
 
     # Top-left: AES mode throughput comparison (illustrative numbers).
     aes_modes: Sequence[str] = ("ECB", "CBC", "GCM", "CTR", "CFB")
@@ -94,7 +94,8 @@ def make_performance_dashboard(save_path: str | Path) -> Path:
     for bar, status in zip(bars, statuses):
         ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 3, status, ha="center", va="bottom")
 
-    fig.tight_layout(rect=(0, 0, 1, 0.95))
+    fig.text(0.5, 0.01, "Illustrative scaling only; not a benchmark.", ha="center", fontsize=9)
+    fig.tight_layout(rect=(0, 0.03, 1, 0.94))
     return save(fig, target)
 
 

@@ -635,61 +635,36 @@ def run_entropy_checks(*, wait_for_key: bool = True):
     return result
 
 
-def export_dashboards(*, wait_for_key: bool = True):
+def export_dashboards(no_pause: bool = False) -> list:
     console_ui.section("Export Dashboards (PNG)")
-
-    def _aggregate(results):
-        summary = {}
-        for result in results:
-            resolved_target = pathlib.Path(result.target).resolve()
-            entry = summary.setdefault(
-                resolved_target,
-                {"status": "skipped", "reasons": set(), "output": None},
-            )
-            if result.status == "saved" and result.output is not None:
-                entry["status"] = "saved"
-                entry["output"] = pathlib.Path(result.output).resolve()
-                entry["reasons"].clear()
-            elif entry["status"] != "saved" and getattr(result, "reason", ""):
-                entry["reasons"].add(result.reason)
-        return summary
 
     try:
         results = _dashboard_module.make_all_dashboards()
     except Exception as exc:  # pragma: no cover - runtime safeguard
         console_ui.error(f"Dashboard export failed: {exc}")
-        if wait_for_key:
+        if not no_pause:
             input("\nPress Enter to return to the main menu...")
         return []
 
-    saved_results = [res for res in results if getattr(res, "status", "") == "saved" and getattr(res, "output", None)]
-
-    if saved_results:
-        console_ui.success("Saved dashboards:")
-        for result in saved_results:
-            print(f"  {pathlib.Path(result.output).resolve()}")
+    if results:
+        for item in results:
+            title = item.get("title", "Dashboard")
+            path = item.get("path")
+            skipped = item.get("skipped", False)
+            reason = item.get("reason")
+            if not skipped and path is not None:
+                resolved_path = pathlib.Path(path)
+                console_ui.success(f"{title} -> {resolved_path}")
+            else:
+                detail = reason or "unknown reason"
+                console_ui.warning(f"{title} (skipped: {detail})")
     else:
         console_ui.info("No dashboards were generated.")
 
-    summary = _aggregate(results)
-    if summary:
-        console_ui.section("Summary")
-        for path in sorted(summary):
-            entry = summary[path]
-            if entry["status"] == "saved" and entry.get("output") is not None:
-                print(f"  {entry['output']}")
-            else:
-                reasons = entry["reasons"]
-                if reasons:
-                    reason_text = "; ".join(sorted(reasons))
-                    print(f"  {path} (skipped: {reason_text})")
-                else:
-                    print(f"  {path} (skipped)")
-
-    if wait_for_key:
+    if not no_pause:
         input("\nPress Enter to return to the main menu...")
 
-    return [pathlib.Path(result.output) for result in saved_results]
+    return results
 
 # Desired run_all output sample (for developers only):
 # [1/6] Preparing to run: AES Encryption Modes (ECB, CBC, GCM)
@@ -762,6 +737,11 @@ def parse_args():
         action="store_true",
         help="Disable colors/banners; print plain ASCII.",
     )
+    ap.add_argument(
+        "--no-pause",
+        action="store_true",
+        help="Do not pause for input after demo/export steps (useful for CI).",
+    )
     return ap.parse_args()
 
 def main():
@@ -799,7 +779,7 @@ def main():
         elif choice == "7":
             run_all(wait_for_key=True)
         elif choice == "8":
-            export_dashboards()
+            items = export_dashboards(no_pause=args.no_pause)
         elif choice == "0" or choice.lower() in {"q", "quit", "exit"}:
             print("Goodbye!")
             break

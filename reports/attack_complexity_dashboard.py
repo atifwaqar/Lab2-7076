@@ -51,6 +51,8 @@ def _prepare_bleich_ranges(sizes: Iterable[int]) -> tuple[list[int], list[int], 
 
 
 def make_attack_complexity_dashboard(save_path: str | Path) -> Path:
+    """Generate the cryptographic security analysis dashboard to PNG."""
+
     if not HAS_MPL:  # pragma: no cover - matplotlib optional dependency guard
         raise RuntimeError("matplotlib is required to generate dashboards")
 
@@ -130,8 +132,9 @@ def make_attack_complexity_dashboard(save_path: str | Path) -> Path:
     ax_d.set_ylim(0, 8.2)
     ax_d.legend()
 
-    fig.suptitle("Attack Complexity Dashboard (Illustrative Models)")
-    fig.tight_layout(rect=(0, 0, 1, 0.97))
+    fig.suptitle("Cryptographic Security Analysis (illustrative)")
+    fig.text(0.5, 0.01, "Illustrative scaling only; not a benchmark.", ha="center", fontsize=9)
+    fig.tight_layout(rect=(0, 0.03, 1, 0.95))
 
     target = save(fig, save_path)
     return target
