@@ -10,7 +10,7 @@ from typing import Dict, Iterable, Tuple
 from utils.entropy import shannon_entropy
 from utils.plotting import HAS_MPL, nice_axes, save, wide_grid
 
-_TITLE = "Key Entropy and Quality Analysis"
+_TITLE = "Key Entropy and Quality Analysis (illustrative)"
 _MAX_ENTROPY = 8.0
 
 _SAMPLES: Dict[str, bytes] = {
@@ -45,7 +45,7 @@ def _collision_probability(key_bits: int, count: float) -> float:
 
 
 def make_key_entropy_dashboard(save_path: str | Path) -> Path:
-    """Render the key entropy dashboard to *save_path* and return the file path."""
+    """Generate the key entropy dashboard and save to PNG."""
     target = Path(save_path)
     if not HAS_MPL:
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -117,5 +117,6 @@ def make_key_entropy_dashboard(save_path: str | Path) -> Path:
     ax_birthday.set_ylim(1e-20, 1.0)
     ax_birthday.legend(title="Key Count")
 
-    fig.tight_layout(rect=[0, 0, 1, 0.96])
+    fig.text(0.5, 0.01, "Illustrative scaling only; not a benchmark.", ha="center", fontsize=9)
+    fig.tight_layout(rect=[0, 0.03, 1, 0.96])
     return save(fig, target)

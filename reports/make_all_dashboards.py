@@ -1,38 +1,46 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from importlib import import_module
 from pathlib import Path
-from typing import Callable, List, Optional, Sequence, Tuple
+from typing import Callable, Optional, Sequence, Tuple, TypedDict
 
 from utils.plotting import HAS_MPL, ensure_out_dir
 
-_DASHBOARD_SPECS: Sequence[Tuple[str, str, str]] = (
-    ("attacks.bleichenbacher_oracle", "make_attack_complexity_dashboard", "attack_complexity_analysis.png"),
-    ("reports.ecdh_visualization", "make_ecdh_visualization", "ecdh_visualization.png"),
-    ("reports.attack_complexity_dashboard", "make_attack_complexity_dashboard", "attack_complexity_analysis.png"),
-    ("ecdh.ecdh_tinyec", "make_ecdh_visualization", "ecdh_visualization.png"),
-    ("reports.key_entropy_dashboard", "make_key_entropy_dashboard", "key_entropy_analysis.png"),
-    ("reports.performance_dashboard", "make_performance_dashboard", "performance_comparison.png"),
+_DASHBOARD_SPECS: Sequence[Tuple[str, str, str, str]] = (
+    (
+        "Cryptographic Security Analysis",
+        "reports.attack_complexity_dashboard",
+        "make_attack_complexity_dashboard",
+        "attack_complexity_analysis.png",
+    ),
+    (
+        "Elliptic Curve Cryptography Visualization",
+        "reports.ecdh_visualization",
+        "make_ecdh_visualization",
+        "ecdh_visualization.png",
+    ),
+    (
+        "Key Entropy and Quality Analysis",
+        "reports.key_entropy_dashboard",
+        "make_key_entropy_dashboard",
+        "key_entropy_analysis.png",
+    ),
+    (
+        "Cryptographic Performance and Security Trade-offs",
+        "reports.performance_dashboard",
+        "make_performance_dashboard",
+        "performance_comparison.png",
+    ),
 )
 
 
-@dataclass
-class DashboardResult:
-    """Outcome of a single dashboard export attempt."""
+class DashboardOutcome(TypedDict):
+    """Dictionary describing the outcome of a dashboard export."""
 
-    module: str
-    attr: str
-    target: Path
-    status: str
-    reason: str = ""
-    output: Optional[Path] = None
-
-    def resolved_target(self) -> Path:
-        return self.target.resolve()
-
-    def resolved_output(self) -> Optional[Path]:
-        return None if self.output is None else self.output.resolve()
+    title: str
+    path: Optional[Path]
+    skipped: bool
+    reason: Optional[str]
 
 
 def _load_callable(module_name: str, attr: str) -> Tuple[Optional[Callable[[Path], Optional[Path]]], str]:
@@ -50,100 +58,95 @@ def _load_callable(module_name: str, attr: str) -> Tuple[Optional[Callable[[Path
 def _invoke_dashboard(
     func: Callable[[Path], Optional[Path]],
     target: Path,
-    *,
-    module_name: str,
-    attr: str,
-) -> Tuple[Optional[Path], str]:
+) -> Tuple[Optional[Path], Optional[str]]:
     try:
         result = func(target)
     except (ModuleNotFoundError, ImportError) as exc:
         name = getattr(exc, "name", None) or str(exc)
         reason = f"missing dependency: {name}"
-        print(f"skipped {module_name}.{attr} ({reason})")
         return None, reason
+    except RuntimeError as exc:
+        message = str(exc)
+        if message == "tinyec not installed":
+            return None, "missing dependency: tinyec"
+        return None, f"error: {message}"
     except Exception as exc:  # pragma: no cover - runtime safeguard
-        reason = f"error: {exc}"
-        print(f"skipped {module_name}.{attr} ({reason})")
-        return None, reason
+        return None, f"error: {exc}"
     if result is None:
         if target.exists():
-            return target, ""
-        reason = "no output generated"
-        print(f"skipped {module_name}.{attr} ({reason})")
-        return None, reason
-    return Path(result), ""
+            return target, None
+        return None, "no output generated"
+    return Path(result), None
 
 
-def make_all_dashboards() -> List[DashboardResult]:
-    """Generate all available dashboards and describe the outcome of each attempt."""
+def make_all_dashboards() -> list[DashboardOutcome]:
+    """Generate all dashboards, printing a summary and returning detailed results."""
 
     out_dir = ensure_out_dir("Visualizations")
-    results: List[DashboardResult] = []
+    results: list[DashboardOutcome] = []
 
     if not HAS_MPL:
         reason = "matplotlib not installed"
         print("matplotlib is not available; skipping dashboard export.")
-        for module_name, attr, filename in _DASHBOARD_SPECS:
-            target = out_dir / filename
-            print(f"skipped {module_name}.{attr} ({reason})")
+        for title, _module_name, _attr, _filename in _DASHBOARD_SPECS:
+            print(f"Skipped: {title} ({reason})")
             results.append(
-                DashboardResult(
-                    module=module_name,
-                    attr=attr,
-                    target=target,
-                    status="skipped",
-                    reason=reason,
-                )
+                {
+                    "title": title,
+                    "path": None,
+                    "skipped": True,
+                    "reason": reason,
+                }
             )
         return results
 
-    for module_name, attr, filename in _DASHBOARD_SPECS:
+    for title, module_name, attr, filename in _DASHBOARD_SPECS:
         func, reason = _load_callable(module_name, attr)
         target = out_dir / filename
         if func is None:
-            print(f"skipped {module_name}.{attr} ({reason})")
+            print(f"Skipped: {title} ({reason})")
             results.append(
-                DashboardResult(
-                    module=module_name,
-                    attr=attr,
-                    target=target,
-                    status="skipped",
-                    reason=reason,
-                )
+                {
+                    "title": title,
+                    "path": None,
+                    "skipped": True,
+                    "reason": reason,
+                }
             )
             continue
 
-        path, invoke_reason = _invoke_dashboard(func, target, module_name=module_name, attr=attr)
+        path, invoke_reason = _invoke_dashboard(func, target)
         if path is None:
+            skip_reason = invoke_reason or reason or "unknown error"
+            print(f"Skipped: {title} ({skip_reason})")
             results.append(
-                DashboardResult(
-                    module=module_name,
-                    attr=attr,
-                    target=target,
-                    status="skipped",
-                    reason=invoke_reason or reason,
-                )
+                {
+                    "title": title,
+                    "path": None,
+                    "skipped": True,
+                    "reason": skip_reason,
+                }
             )
             continue
 
         resolved = Path(path)
+        absolute = resolved.resolve()
+        print(f"Saved: {title} -> {absolute}")
         results.append(
-            DashboardResult(
-                module=module_name,
-                attr=attr,
-                target=target,
-                status="saved",
-                output=resolved,
-            )
+            {
+                "title": title,
+                "path": absolute,
+                "skipped": False,
+                "reason": None,
+            }
         )
     return results
 
 
-def main() -> None:
-    results = make_all_dashboards()
-    for result in results:
-        if result.status == "saved" and result.output is not None:
-            print(result.output.resolve())
+def main() -> list[DashboardOutcome]:
+    """Entry point used by ``python -m reports.make_all_dashboards``."""
+
+    return make_all_dashboards()
 
 
 if __name__ == "__main__":
