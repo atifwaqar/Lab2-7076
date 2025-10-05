@@ -1,13 +1,13 @@
 """
-Minimal scaffold for Bleichenbacher's padding oracle attack (PKCS#1 v1.5).
-
-This file provides:
-
-* A toy RSA key
-* A padding/validation oracle that ONLY reveals padding-valid/invalid
-* A placeholder for the adaptive attack loop
-
-It runs and demonstrates the oracle behavior.
+Bleichenbacher PKCS#1 v1.5 padding-oracle (demo)
+Implements:
+  Step 1: Blinding                      (RFC-style numbering)
+  Step 2a: Search for initial s         (padding-valid c' = c * s^e mod n)
+  Step 2b: If multiple intervals, increase s linearly
+  Step 2c: Focused search using r       (ceil((2B + rn)/M_max) .. (3B + rn - 1)/M_min)
+  Step 3: Narrow M intervals
+  Step 4: Recover m when |M|=1 and bounds meet
+Logging lines like "Step 2c: found s=..." correspond to these phases.
 """
 
 import logging
@@ -78,7 +78,7 @@ def bleichenbacher_attack(
 
         logger.info("Iteration %d: %d interval(s) remaining", i, len(M))
         if i == 1:
-            # Step 2.a: search for the first valid s
+            # -- Step 2a: initial s search
             base = ceil_div(n, three_B)
             s = base
             limit = base + 40000
@@ -128,7 +128,7 @@ def bleichenbacher_attack(
                     time.perf_counter() - start,
                 )
         elif len(M) >= 2:
-            # Step 2.b: when there are multiple intervals, incrementally search
+            # -- Step 2b: linear search when multiple intervals remain
             start = time.perf_counter()
             attempts = 0
             s += 1
@@ -151,7 +151,7 @@ def bleichenbacher_attack(
                 time.perf_counter() - start,
             )
         else:
-            # Step 2.c: single interval, use focused search on r
+            # -- Step 2c: focused search with r and bounds
             a, b = M[0]
             r = ceil_div(2 * (b * s - two_B), n)
             logger.info(
@@ -197,7 +197,7 @@ def bleichenbacher_attack(
                     continue
                 break
 
-        # Step 3: Narrow the set of intervals
+        # -- Step 3: intervals narrowing (M update)
         new_M = []
         for a, b in M:
             r_min = ceil_div(a * s - three_B + 1, n)
@@ -237,7 +237,7 @@ def bleichenbacher_attack(
             min((b - a) for a, b in M),
         )
 
-        # Step 4: check if the interval collapsed
+        # -- Step 4: recover m when interval collapses
         if len(M) == 1:
             a, b = M[0]
             if a == b:

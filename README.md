@@ -10,6 +10,7 @@ This repository contains reference implementations and demos for:
 
 > **Important security notes**
 > - File-based RSA here is **textbook RSA** (no OAEP) and **insecure in practice**. Use **RSA-OAEP** for real encryption.
+>   For real encryption, see `rsa/oaep_example.py` (PyCryptodome, OAEP).
 > - **GCM nonces must be unique per key**. **CBC IVs must be random and unique**. Demos intentionally show what goes wrong if these are misused.
 
 ## Prerequisites
