@@ -9,6 +9,8 @@ from utils.plotting import HAS_MPL, ensure_out_dir
 _DASHBOARD_SPECS: Sequence[Tuple[str, str, str]] = (
     ("attacks.bleichenbacher_oracle", "make_attack_complexity_dashboard", "attack_complexity_analysis.png"),
     ("reports.ecdh_visualization", "make_ecdh_visualization", "ecdh_visualization.png"),
+    ("reports.attack_complexity_dashboard", "make_attack_complexity_dashboard", "attack_complexity_analysis.png"),
+    ("ecdh.ecdh_tinyec", "make_ecdh_visualization", "ecdh_visualization.png"),
     ("aes_modes.entropy_demo", "make_key_entropy_dashboard", "key_entropy_analysis.png"),
     ("reports.performance_dashboard", "make_performance_dashboard", "performance_comparison.png"),
 )
