@@ -7,7 +7,7 @@ Briefly state goals: implement AES modes (ECB/CBC/GCM), RSA, DH, ECDH, and (opti
 ## Methods
 
 * **AES**: PyCryptodome; PKCS#7 padding for ECB/CBC; random IV (CBC) and random nonce (GCM).
-* **RSA**: Miller–Rabin primality, modular inverse (Extended Euclid), keygen, int-based encrypt/decrypt.
+* **RSA**: Miller–Rabin primality, modular inverse (Extended Euclid), keygen, int-based encrypt/decrypt; RSA blinding limits timing leakage.
 * **DH**: Safe prime p and generator g; verify shared secret equality.
 * **ECDH**: `tinyec` on `secp256r1`; verify shared point equality.
 * **Attack (optional)**: Oracle validates PKCS#1 v1.5 padding; adaptive chosen-ciphertext outline.
@@ -17,13 +17,13 @@ Briefly state goals: implement AES modes (ECB/CBC/GCM), RSA, DH, ECDH, and (opti
 * **ECB pattern leakage**: identical plaintext blocks produce identical ciphertext blocks.
 * **CBC IV reuse**: first-block relation leaks structure; show C1 ⊕ C1'.
 * **GCM nonce reuse**: tag/verification issues and keystream reuse risks.
-* **RSA**: correctness checks, key sizes, performance notes.
+* **RSA**: correctness checks, 2048-bit default keys for demos, blinding protects private exponent during decryption.
 * **(EC)DH**: successful shared secret equality.
 * **Oracle**: demonstrates how a padding-only leak violates IND-CCA.
 
 ## Key Entropy & Best Practices
 
-* Use CSPRNGs; 128–256-bit symmetric keys; RSA ≥ 2048 bits; standard NIST curves (P-256+).
+* Use the `secrets` CSPRNG throughout; 128–256-bit symmetric keys; RSA ≥ 2048 bits (default in demos); standard NIST curves such as P-256 and beyond.
 * Unique IVs (CBC) and unique nonces (GCM) per message.
 * Use OAEP for RSA encryption; avoid PKCS#1 v1.5 in new systems.
 
