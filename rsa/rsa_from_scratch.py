@@ -106,6 +106,29 @@ def generate_key(bits: int = 2048, e: int = 65537):
     return n, e, d
 
 
+def generate_key_with_crt(bits: int = 2048, e: int = 65537) -> tuple[int, int, int, int, int]:
+    """Generate an RSA keypair returning CRT parameters ``(n, e, d, p, q)``."""
+
+    if e % 2 == 0:
+        raise ValueError("Public exponent must be odd")
+
+    p_bits = bits // 2
+    q_bits = bits - p_bits
+
+    while True:
+        p = gen_prime(p_bits)
+        q = gen_prime(q_bits)
+        if p == q:
+            continue
+        phi = (p - 1) * (q - 1)
+        if egcd(e, phi)[0] == 1:
+            break
+
+    n = p * q
+    d = inv_mod(e, phi)
+    return n, e, d, p, q
+
+
 def i2osp(data: bytes) -> int:
     """Convert a byte-string into its non-negative integer representation."""
 
@@ -160,6 +183,46 @@ def decrypt_int(
         return (m_blinded * r_inv) % n
 
     return pow(c, d, n)
+
+
+def decrypt_int_crt(
+    c: int,
+    d: int,
+    n: int,
+    p: int,
+    q: int,
+    *,
+    e: int | None = 65537,
+    use_blinding: bool = True,
+) -> int:
+    """RSA decryption using the Chinese Remainder Theorem and optional blinding."""
+
+    if not (0 <= c < n):
+        raise ValueError("Ciphertext representative out of range")
+
+    if use_blinding and e is not None:
+        while True:
+            r = secrets.randbelow(n - 1) + 1
+            if egcd(r, n)[0] == 1:
+                break
+        c_prime = (c * pow(r, e, n)) % n
+    else:
+        r = None
+        c_prime = c
+
+    dp = d % (p - 1)
+    dq = d % (q - 1)
+    q_inv = pow(q, -1, p)
+
+    m1 = pow(c_prime, dp, p)
+    m2 = pow(c_prime, dq, q)
+    h = (q_inv * (m1 - m2)) % p
+    m_blinded = m2 + h * q
+
+    if r is not None:
+        r_inv = pow(r, -1, n)
+        return (m_blinded * r_inv) % n
+    return m_blinded % n
 
 
 def rsa_roundtrip(bits: int = 512) -> Tuple[int, int, int, bool]:
