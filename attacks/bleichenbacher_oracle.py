@@ -14,8 +14,10 @@ import logging
 import secrets
 import sys
 import time
+from dataclasses import dataclass
 from math import gcd
 from pathlib import Path
+from typing import List, Sequence
 
 try:
     from rsa.rsa_from_scratch import generate_key, i2osp, os2ip, encrypt_int, decrypt_int
@@ -27,6 +29,18 @@ except ModuleNotFoundError:  # pragma: no cover - convenience for direct executi
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class IterationStats:
+    """Telemetry for a single Bleichenbacher iteration."""
+
+    iteration: int
+    intervals: int
+    min_width: int
+    s: int
+    queries_this_iter: int
+    total_queries: int
+
+
 def bleichenbacher_attack(
     c0: int,
     e: int,
@@ -34,8 +48,14 @@ def bleichenbacher_attack(
     k: int,
     oracle,
     fast_oracle=None,
-) -> bytes:
-    """Recover the padded message using Bleichenbacher's adaptive attack."""
+    *,
+    return_trace: bool = False,
+) -> bytes | tuple[bytes, Sequence[IterationStats]]:
+    """Recover the padded message using Bleichenbacher's adaptive attack.
+
+    When ``return_trace`` is ``True`` the function also returns the
+    per-iteration telemetry that can be graphed to visualise convergence.
+    """
 
     def ceil_div(num: int, den: int) -> int:
         return -(-num // den)
@@ -56,14 +76,21 @@ def bleichenbacher_attack(
 
     fast_mode = fast_oracle is not None
 
+    telemetry: List[IterationStats] = []
+    query_count = 0
+
     def query(s_candidate: int, *, fast: bool = False) -> bool:
+        nonlocal query_count
         # ensure s is invertible mod n (s ∈ Z*_n)
         if gcd(s_candidate, n) != 1:
             return False
         c_test = (c0 * pow(s_candidate, e, n)) % n
         if fast and fast_mode:
-            return fast_oracle(c_test)
-        return oracle(c_test)
+            result = fast_oracle(c_test)
+        else:
+            result = oracle(c_test)
+        query_count += 1
+        return result
 
     if fast_mode:
         logger.info(
@@ -76,11 +103,15 @@ def bleichenbacher_attack(
         if rounds > MAX_ROUNDS:
             raise RuntimeError("Attack did not converge within MAX_ROUNDS")
 
+        queries_before = query_count
         logger.info("Iteration %d: %d interval(s) remaining", i, len(M))
         if i == 1:
             # -- Step 2a: initial s search
             base = ceil_div(n, three_B)
             s = base
+            # About 1 in 2^16 s candidates will decrypt to a value that begins
+            # with 0x0002, so the initial successful query typically appears
+            # after tens of thousands of tries for toy moduli.
             limit = base + 40000
             logger.info(
                 "Step 2a: searching for initial s starting at %d (limit %d)",
@@ -231,10 +262,22 @@ def bleichenbacher_attack(
                 merged.append((start, end))
 
         M = merged
+        min_width = min((b - a) for a, b in M)
+        if return_trace:
+            telemetry.append(
+                IterationStats(
+                    iteration=i,
+                    intervals=len(M),
+                    min_width=min_width,
+                    s=s if s is not None else 0,
+                    queries_this_iter=query_count - queries_before,
+                    total_queries=query_count,
+                )
+            )
         logger.info(
-            "Step 3: refined to %d interval(s); smallest width=%d", 
+            "Step 3: refined to %d interval(s); smallest width=%d",
             len(M),
-            min((b - a) for a, b in M),
+            min_width,
         )
 
         # -- Step 4: recover m when interval collapses
@@ -244,7 +287,15 @@ def bleichenbacher_attack(
                 m = a
                 em = os2ip(m, length=k)
                 logger.info("Step 4: interval collapsed; recovered message.")
-                return pkcs1v15_unpad(em)
+                plaintext = pkcs1v15_unpad(em)
+                logger.info(
+                    "Attack summary: %d oracle queries across %d iterations.",
+                    query_count,
+                    i,
+                )
+                if return_trace:
+                    return plaintext, telemetry
+                return plaintext
 
         i += 1
 
@@ -293,9 +344,49 @@ def oracle_padding_valid_prefix(c: int, d: int, n: int, e: int, k: int) -> bool:
     em = os2ip(m, length=k)
     return len(em) >= 2 and em.startswith(b"\x00\x02")
 
-def demo_oracle(use_fast: bool = False, bits: int = 96, e: int = 3):
+def plot_interval_convergence(
+    stats: Sequence[IterationStats], destination: str | Path
+) -> Path:
+    """Plot the minimum interval width per iteration on a log scale."""
+
+    if not stats:
+        raise ValueError("No iteration telemetry to plot")
+
+    import matplotlib.pyplot as plt
+
+    iterations = [entry.iteration for entry in stats]
+    min_widths = [entry.min_width for entry in stats]
+
+    fig, ax = plt.subplots(figsize=(6.5, 3.8))
+    ax.plot(iterations, min_widths, marker="o", linewidth=1.5)
+    ax.set_xlabel("Iteration")
+    ax.set_ylabel("Minimum interval width |b - a|")
+    ax.set_yscale("log")
+    ax.set_title("Bleichenbacher interval convergence")
+    ax.grid(True, which="both", linestyle="--", linewidth=0.5, alpha=0.6)
+
+    destination = Path(destination)
+    fig.tight_layout()
+    fig.savefig(destination, bbox_inches="tight")
+    plt.close(fig)
+    return destination
+
+
+def demo_oracle(
+    use_fast: bool = False,
+    bits: int = 96,
+    e: int = 3,
+    *,
+    plot_path: str | Path | None = None,
+    log_level: int | str = logging.INFO,
+):
+    if isinstance(log_level, str):
+        level_value = getattr(logging, log_level.upper(), logging.INFO)
+    else:
+        level_value = log_level
+
     logging.basicConfig(
-        level=logging.INFO,
+        level=level_value,
         format="[%(asctime)s] %(levelname)s %(name)s: %(message)s",
         datefmt="%H:%M:%S",
     )
@@ -325,17 +416,28 @@ def demo_oracle(use_fast: bool = False, bits: int = 96, e: int = 3):
     print(f"Oracle says padding valid (tampered)? {oracle_padding_valid(c_bad, d, n, e, k)}")
 
     fast_cb = (lambda ct: oracle_padding_valid_prefix(ct, d, n, e, k)) if use_fast else None
-    recovered = bleichenbacher_attack(
+    want_trace = plot_path is not None
+    result = bleichenbacher_attack(
         c,
         e,
         n,
         k,
         oracle=lambda ct: oracle_padding_valid(ct, d, n, e, k),
         fast_oracle=fast_cb,
+        return_trace=want_trace,
     )
+    if want_trace:
+        recovered, stats = result
+    else:
+        recovered = result
+        stats = None
     logger.info("Attack completed")
     print(f"Recovered plaintext: {recovered!r}")
     print(f"Success? {recovered == pt}")
+
+    if plot_path and stats is not None:
+        out_path = plot_interval_convergence(stats, plot_path)
+        print(f"Saved interval convergence plot to {out_path}")
 
 
 def demo_fast_oracle(bits: int = 96, e: int = 3):
@@ -373,4 +475,35 @@ def demo_fast_oracle(bits: int = 96, e: int = 3):
 
 
 if __name__ == "__main__":
-    demo_oracle()
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Demonstrate a Bleichenbacher padding-oracle attack",
+    )
+    parser.add_argument("--fast", action="store_true", help="Use the loose prefix oracle")
+    parser.add_argument("--bits", type=int, default=96, help="RSA modulus size in bits")
+    parser.add_argument(
+        "--exponent",
+        type=int,
+        default=3,
+        help="Public exponent e (must be odd and >= 3)",
+    )
+    parser.add_argument(
+        "--plot",
+        type=Path,
+        help="Write a convergence plot to this path (requires matplotlib)",
+    )
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        help="Logging verbosity (DEBUG, INFO, WARNING, ...)",
+    )
+    args = parser.parse_args()
+
+    demo_oracle(
+        use_fast=args.fast,
+        bits=args.bits,
+        e=args.exponent,
+        plot_path=args.plot,
+        log_level=args.log_level,
+    )

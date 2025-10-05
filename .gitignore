@@ -12,3 +12,6 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+
+# Generated artifacts
+report/bleichenbacher_interval_convergence.png

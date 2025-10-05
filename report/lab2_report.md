@@ -19,7 +19,13 @@ Briefly state goals: implement AES modes (ECB/CBC/GCM), RSA, DH, ECDH, and (opti
 * **GCM nonce reuse**: tag/verification issues and keystream reuse risks.
 * **RSA**: correctness checks, 2048-bit default keys for demos, blinding protects private exponent during decryption.
 * **(EC)DH**: successful shared secret equality.
-* **Oracle**: demonstrates how a padding-only leak violates IND-CCA.
+* **Oracle**: demonstrates how a padding-only leak violates IND-CCA. The step-2
+  search is effectively a Bernoulli process that succeeds once the blinded
+  plaintext starts with `0x0002`. Because the padding oracle checks a 16-bit
+  prefix, the hit probability is ≈ 2⁻¹⁶; therefore the expected number of
+  ciphertext queries before the first success is about 65k even for our 96-bit
+  toy modulus. This matches the observed hundred-thousand-candidate scans and aligns with
+  the `≈ 1/p` behaviour highlighted in Bleichenbacher's original analysis.
 
 ## Key Entropy & Best Practices
 
@@ -34,8 +40,11 @@ python aes_modes/ecb_cbc_gcm.py
 python rsa/rsa_from_scratch.py
 python dh/dh_small_prime.py
 python ecdh/ecdh_tinyec.py
-python attacks/bleichenbacher_oracle.py
+python attacks/bleichenbacher_oracle.py --log-level WARNING --plot report/bleichenbacher_interval_convergence.png
 ```
+The optional `--plot` flag writes a log-scale convergence figure that tracks
+the minimum interval width per iteration, making the shrinkage of the search
+space visually apparent.
 
 ## Conclusion
 
