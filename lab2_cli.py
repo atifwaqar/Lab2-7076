@@ -50,20 +50,30 @@ from rsa.rsa_file_io import (
 )
 
 # DH / ECDH have demo() functions
-from dh.dh_small_prime import demo as dh_demo
+from dh.dh_small_prime import (
+    demo as dh_demo,
+    dh_demo as dh_shared_secret_demo,
+    dh_aead_demo,
+)
 from dh.dh_file_io import (
     run_encrypt_console as run_dh_encrypt_console,
     run_decrypt_console as run_dh_decrypt_console,
 )
 
 try:
-    from ecdh.ecdh_tinyec import demo as ecdh_demo
+    from ecdh.ecdh_tinyec import (
+        demo as ecdh_demo,
+        ecdh_demo as ecdh_shared_secret_demo,
+        ecdh_aead_demo,
+    )
     from ecdh.ecdh_file_io import (
         run_encrypt_console as run_ecdh_encrypt_console,
         run_decrypt_console as run_ecdh_decrypt_console,
     )
 except Exception as e:
     ecdh_demo = None
+    ecdh_shared_secret_demo = None
+    ecdh_aead_demo = None
     run_ecdh_encrypt_console = None
     run_ecdh_decrypt_console = None
     _ecdh_import_error = e
@@ -75,6 +85,25 @@ except Exception:
     bleichenbacher_demo = None
 
 BANNER = pyfiglet.figlet_format("Lab2 - Crypto Demos")
+
+_RSA_PADDING_NOTE_PRINTED = False
+
+
+def _print_rsa_padding_note():
+    global _RSA_PADDING_NOTE_PRINTED
+    if not _RSA_PADDING_NOTE_PRINTED:
+        print(
+            "Defaulting to RSA-OAEP (PKCS#1 v2.2). Textbook RSA is insecure and only available via --insecure."
+        )
+        _RSA_PADDING_NOTE_PRINTED = True
+
+
+def _print_summary(threat: str, misuse: str, evidence: str, remedy: str) -> None:
+    indent = "    "
+    print(f"{indent}Threat model: {threat}")
+    print(f"{indent}Misuse shown: {misuse}")
+    print(f"{indent}Evidence: {evidence}")
+    print(f"{indent}Remedy: {remedy}")
 
 
 def clear_screen() -> None:
@@ -120,6 +149,13 @@ def _run_aes_demos():
     for block in ecb_data["block_metadata"]:
         marker = "*" if block["repeats"] > 1 else " "
         print(f"      Block {block['index']:02d}{marker}: {block['hex']}")
+    repeated_blocks = ecb_data["total_blocks"] - ecb_data["unique_blocks"]
+    _print_summary(
+        "attacker observes ciphertext layout",
+        "ECB reveals repeated plaintext blocks",
+        f"Repeated blocks: {repeated_blocks}/{ecb_data['total_blocks']}",
+        "Switch to randomized mode (CBC with fresh IV or AEAD)",
+    )
     print()
     print("[AES] CBC IV reuse demo:")
     cbc_data = demo_cbc_iv_reuse()
@@ -138,6 +174,13 @@ def _run_aes_demos():
     )
     print(f"    Tampered P2'[0]: {cbc_data['tampered_first_block'].hex()}")
     print(f"    Original P2[0]: {cbc_data['original_first_block'].hex()}")
+    xor_matches = cbc_data["xor_ciphertexts"] == cbc_data["xor_plaintexts"]
+    _print_summary(
+        "attacker can observe/modify ciphertext",
+        "CBC IV reuse exposes prefix equality",
+        f"XOR(C1[0],C2[0]) == XOR(P1[0],P2[0]) -> {xor_matches}",
+        "Use unpredictable IVs once and add authentication (AEAD)",
+    )
     print()
     print("[AES] GCM nonce reuse demo:")
     gcm_data = demo_gcm_nonce_reuse()
@@ -155,6 +198,13 @@ def _run_aes_demos():
         )
     else:
         print("    Warning: verification unexpectedly succeeded with wrong tag!")
+    verification = gcm_data["verification_error"] or "no error"
+    _print_summary(
+        "attacker replays/forges under reused nonce",
+        "GCM nonce reuse enables tag/ciphertext malleability",
+        f"Tags equal: {gcm_data['tags_equal']} | Wrong-tag check -> {verification}",
+        "Never reuse nonces; prefer counter management per key",
+    )
     print()
     print("[AES] Demonstrating keystream reuse XOR leakage in GCM:")
     leak_data = demo_gcm_keystream_reuse_xor_leak()
@@ -178,6 +228,13 @@ def _run_aes_demos():
         leak_data["recovered_mid"],
     )
     print(f"    Expected segment: {leak_data['expected_mid']}")
+    xor_leak_matches = leak_data["leak_hex"] == leak_data["expected_hex"]
+    _print_summary(
+        "attacker compares two ciphertexts under same nonce",
+        "CTR/GCM keystream reuse leaks XOR of plaintexts",
+        f"XOR(C1,C2) == XOR(P1,P2) -> {xor_leak_matches}",
+        "Derive unique nonces per message and enforce AEAD limits",
+    )
     print("\nAES demos done.")
     line()
 
@@ -210,11 +267,13 @@ def run_aes(run_default: bool = False):
 def _run_rsa_demo():
     line()
     print("== RSA Round-trip ==")
+    _print_rsa_padding_note()
     # small demo using existing functions
     n, e, d = generate_key(2048)
     msg = b"hi rsa from CLI"
     m = i2osp(msg)
     c = encrypt_int(m, e, n)
+    repeat_c = encrypt_int(m, e, n)
     dec = decrypt_int(c, d, n, e=e)
     out = os2ip(dec)
     ok = (out == msg)
@@ -231,10 +290,18 @@ def _run_rsa_demo():
     print(f"Round-trip OK? {ok}")
     if not ok:
         print("ERROR: RSA round-trip failed.")
+    deterministic = repeat_c == c
+    _print_summary(
+        "attacker can choose plaintexts/ciphertexts",
+        "Textbook RSA without OAEP padding is deterministic",
+        f"encrypt(m) repeated -> same ciphertext: {deterministic}",
+        "Use randomized padding (OAEP) and constant-time checks",
+    )
     line()
 
 def run_rsa(run_default: bool = False):
     if run_default:
+        _print_rsa_padding_note()
         _run_rsa_demo()
         return
 
@@ -246,6 +313,7 @@ def run_rsa(run_default: bool = False):
         print("  3) Decrypt from file")
         print("  0) Back")
         choice = input("Select an option: ").strip().lower()
+        _print_rsa_padding_note()
         if choice == "1":
             _run_rsa_demo()
         elif choice == "2":
@@ -263,6 +331,15 @@ def _run_dh_demo():
     line()
     print("== Diffie–Hellman (finite field) ==")
     dh_demo()
+    digest_a, digest_b = dh_shared_secret_demo()
+    aead_info = dh_aead_demo()
+    shared_match = digest_a == digest_b
+    _print_summary(
+        "active attacker relays DH messages",
+        "Unauthenticated DH allows man-in-the-middle",
+        f"SHA256(shared) match: {shared_match} | HKDF→AEAD ok: {aead_info['ok']}",
+        "Authenticate peers (signatures/PSK) before deriving AEAD keys",
+    )
     line()
 
 def run_dh(run_default: bool = False):
@@ -298,8 +375,36 @@ def _run_ecdh_demo():
         print("ECDH demo unavailable. Import failed.")
         print("Detail:", repr(_ecdh_import_error))
         print("Hint: Did you run `pip install -r requirements.txt`?")
+        digest_len = "n/a"
+        aead_status = "unavailable"
     else:
         ecdh_demo()
+        digest = (
+            ecdh_shared_secret_demo() if ecdh_shared_secret_demo is not None else ""
+        )
+        digest_len = len(digest)
+        if ecdh_aead_demo is not None:
+            aead_info = ecdh_aead_demo()
+            if aead_info.get("skipped"):
+                aead_status = "skipped"
+            else:
+                aead_status = f"ok={aead_info['ok']}"
+        else:
+            aead_status = "unavailable"
+    if ecdh_demo is None:
+        _print_summary(
+            "active attacker relays EC public keys",
+            "ECDH demo unavailable — cannot illustrate AEAD misuse",
+            f"SHA256(shared.x) length: {digest_len} | HKDF→AEAD: {aead_status}",
+            "Install tinyec/matplotlib to explore authenticated ECDH",
+        )
+    else:
+        _print_summary(
+            "active attacker relays EC public keys",
+            "Unauthenticated ECDH enables MITM despite shared secret",
+            f"SHA256(shared.x) length: {digest_len} | HKDF→AEAD: {aead_status}",
+            "Bind keys to identities (certs) and derive AEAD via HKDF",
+        )
     line()
 
 
