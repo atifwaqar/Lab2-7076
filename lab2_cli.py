@@ -18,6 +18,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import pathlib
 import sys
 import textwrap
@@ -74,10 +75,22 @@ except Exception:
 
 BANNER = pyfiglet.figlet_format("Lab2 - Crypto Demos")
 
+
+def clear_screen() -> None:
+    """Clear the terminal screen in a cross-platform way."""
+    command = "cls" if os.name == "nt" else "clear"
+    try:
+        os.system(command)
+    except Exception:
+        # Ignore failures so the CLI still works even if the command is missing.
+        pass
+
+
 def line():
     print("-" * 70)
 
 def menu():
+    clear_screen()
     print(BANNER)
     print("Choose a demo/task to run:")
     print("  1) AES demos (ECB/CBC/GCM + misuse)")
