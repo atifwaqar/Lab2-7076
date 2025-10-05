@@ -44,6 +44,8 @@ def bleichenbacher_attack(c0: int, e: int, n: int, k: int, oracle) -> bytes:
     M = [(two_B, three_B - 1)]
     s = None
     i = 1
+    rounds = 0
+    MAX_ROUNDS = 200_000  # safety guard for demos
 
     def query(s_candidate: int) -> bool:
         # ensure s is invertible mod n (s ∈ Z*_n)
@@ -53,6 +55,10 @@ def bleichenbacher_attack(c0: int, e: int, n: int, k: int, oracle) -> bytes:
         return oracle(c_test)
 
     while True:
+        rounds += 1
+        if rounds > MAX_ROUNDS:
+            raise RuntimeError("Attack did not converge within MAX_ROUNDS")
+
         logger.info("Iteration %d: %d interval(s) remaining", i, len(M))
         if i == 1:
             # Step 2.a: search for the first valid s
@@ -78,33 +84,32 @@ def bleichenbacher_attack(c0: int, e: int, n: int, k: int, oracle) -> bytes:
                     break
                 s += 1
             else:
+                # Deterministic fallback: continue linear search from current s
                 logger.info(
-                    "Step 2a fallback: switching to random search after %d attempts",
-                    attempts,
+                    "Step 2a fallback: switching to deterministic linear search from s=%d",
+                    s,
                 )
                 start = time.perf_counter()
+                more = 0
                 last_log = start
-                while True:
-                    s = secrets.randbelow(n)
-                    if s < base:
-                        continue
-                    attempts += 1
-                    if query(s):
-                        logger.info(
-                            "Step 2a fallback: found s=%d after total %d attempts in %.3fs",
-                            s,
-                            attempts,
-                            time.perf_counter() - start,
-                        )
-                        break
+                while not query(s):
+                    s += 1
+                    more += 1
                     now = time.perf_counter()
-                    if attempts % 5000 == 0 or now - last_log >= 1.0:
+                    if more % 5000 == 0 or now - last_log >= 1.0:
                         logger.info(
-                            "Step 2a fallback: still searching (attempts=%d, elapsed=%.3fs)",
-                            attempts,
+                            "Step 2a fallback: searching... +%d candidates (s=%d, elapsed=%.3fs)",
+                            more,
+                            s,
                             now - start,
                         )
                         last_log = now
+                logger.info(
+                    "Step 2a fallback: found s=%d after total %d attempts in %.3fs",
+                    s,
+                    attempts + more,
+                    time.perf_counter() - start,
+                )
         elif len(M) >= 2:
             # Step 2.b: when there are multiple intervals, incrementally search
             start = time.perf_counter()
