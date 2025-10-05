@@ -44,6 +44,22 @@ def estimate_bleich_calls(bits: int) -> tuple[int, int]:
     return min_calls, max_calls
 
 
+def make_attack_complexity_dashboard(save_path: str | Path) -> Path:
+    """Generate the Bleichenbacher attack complexity dashboard.
+
+    The visualisation logic lives in :mod:`reports.attack_complexity_dashboard` so
+    that it can be shared with other demos.  Import the implementation lazily to
+    avoid creating a circular import at module import time (the report module
+    depends on :func:`estimate_bleich_calls` from this file).
+    """
+
+    from reports.attack_complexity_dashboard import (  # local import to avoid cycle
+        make_attack_complexity_dashboard as _impl,
+    )
+
+    return _impl(save_path)
+
+
 @dataclass
 class IterationStats:
     """Telemetry for a single Bleichenbacher iteration."""
