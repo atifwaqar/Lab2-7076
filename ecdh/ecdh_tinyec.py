@@ -148,7 +148,10 @@ def demo():
     samples = [k * curve.g for k in range(1, 11)]
     _plot_curve_samples(curve, samples)
     _plot_key_exchange(curve, QA, QB, S1)
-    plt.show()
+    # Use a non-blocking show so the CLI regains control even if figures stay open.
+    plt.show(block=False)
+    # Give matplotlib a moment to render the figures before returning to the caller.
+    plt.pause(0.001)
 
 
 if __name__ == "__main__":
