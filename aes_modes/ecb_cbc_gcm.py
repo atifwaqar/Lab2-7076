@@ -64,16 +64,47 @@ def demo_ecb_pattern_leakage():
 
 def demo_cbc_iv_reuse():
     key = get_random_bytes(16)
-    iv = get_random_bytes(16)
-    p1 = b"Message One starts here..." + os.urandom(5)
-    p2 = b"Message Two starts here..." + os.urandom(5)
+    iv = get_random_bytes(BLOCK)
+
+    # Two plaintexts that share the same first block but diverge afterwards.
+    shared_block = b"shared prefix bl"
+    assert len(shared_block) == BLOCK
+    p1 = shared_block + b"ock -> amount=100" + os.urandom(5)
+    p2 = shared_block + b"ock -> amount=900" + os.urandom(5)
+
     c1 = aes_cbc_encrypt(key, p1, iv=iv)
     c2 = aes_cbc_encrypt(key, p2, iv=iv)
-    c1_first = c1[:16]
-    c2_first = c2[:16]
-    print(f"[CBC] IV reused -> first blocks equal? {c1_first == c2_first}")
-    diff = int.from_bytes(c1_first, "big") ^ int.from_bytes(c2_first, "big")
-    print(f"[CBC] C1^C1' (hex): {diff:032x}")
+
+    c1_iv, c1_body = c1[:BLOCK], c1[BLOCK:]
+    c2_iv, c2_body = c2[:BLOCK], c2[BLOCK:]
+    c1_first_block = c1_body[:BLOCK]
+    c2_first_block = c2_body[:BLOCK]
+
+    print(f"[CBC] Reused IV -> identical IV blocks? {c1_iv == c2_iv}")
+    print(f"[CBC] Reused IV -> identical first ciphertext blocks? {c1_first_block == c2_first_block}")
+    print("[CBC] First ciphertext block (hex):", c1_first_block.hex())
+    print("[CBC] Second ciphertext block differs?", c1_body[BLOCK:2*BLOCK] != c2_body[BLOCK:2*BLOCK])
+
+    # Show the classic leakage equation for CBC with reused IV:
+    # C1[0] ^ C2[0] == P1[0] ^ P2[0]
+    p1_first = p1[:BLOCK]
+    p2_first = p2[:BLOCK]
+    x_c = bytes(a ^ b for a, b in zip(c1_first_block, c2_first_block))
+    x_p = bytes(a ^ b for a, b in zip(p1_first, p2_first))
+    print("[CBC] XOR(C1[0], C2[0]) == XOR(P1[0], P2[0]) ?", x_c == x_p)
+    print("[CBC] XOR(C1[0], C2[0]):", x_c.hex())
+    print("[CBC] XOR(P1[0], P2[0]):", x_p.hex())
+
+    # Demonstrate bit-flipping attack on CBC first block via IV tampering
+    # Flip a bit in IV and decrypt c2 under the tampered IV;
+    # the corresponding bit in P2'[0] will flip.
+    from Crypto.Cipher import AES as _AES
+
+    tampered_iv = bytearray(c2_iv)
+    tampered_iv[0] ^= 0x20  # flip one bit
+    dec = _AES.new(key, _AES.MODE_CBC, iv=bytes(tampered_iv)).decrypt(c2_body)
+    tampered_first_block = dec[:BLOCK]
+    print("[CBC] Bit-flip demo: P2'[0] differs from original P2[0]?", tampered_first_block != p2_first)
 
 def demo_gcm_nonce_reuse():
     key = get_random_bytes(16)
@@ -145,4 +176,5 @@ if __name__ == "__main__":
     demo_ecb_pattern_leakage()
     demo_cbc_iv_reuse()
     demo_gcm_nonce_reuse()
+    demo_gcm_keystream_reuse_xor_leak()
     print("Done.")
