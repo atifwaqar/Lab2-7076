@@ -1,4 +1,3 @@
-import random
 import secrets
 
 def egcd(a: int, b: int):
@@ -28,7 +27,7 @@ def miller_rabin(n: int, k: int = 40) -> bool:
         d //= 2
         r += 1
     for _ in range(k):
-        a = random.randrange(2, n - 2)
+        a = secrets.randbelow(n - 3) + 2
         x = pow(a, d, n)
         if x == 1 or x == n - 1:
             continue
