@@ -326,13 +326,23 @@ def run_ecdh(run_default: bool = False):
         else:
             print("Invalid option. Choose 0-3.")
 
-def run_bleichenbacher(run_default: bool = False, fast_default: bool = True):
+def run_bleichenbacher(
+    run_default: bool = False,
+    fast_default: bool = True,
+    *,
+    wait_for_key: bool | None = None,
+):
     line()
     print("== Bleichenbacher Padding-Oracle (scaffold) ==")
+
+    if wait_for_key is None:
+        wait_for_key = not run_default
 
     if bleichenbacher_demo is None:
         print("This demo is optional or missing dependencies.")
         print("If you want to try it, make sure 'attacks/bleichenbacher_oracle.py' is present.")
+        if wait_for_key:
+            input("\nPress Enter to return to the main menu...")
         line()
         return
 
@@ -340,6 +350,8 @@ def run_bleichenbacher(run_default: bool = False, fast_default: bool = True):
         mode = "FAST" if fast_default else "SLOW"
         print(f"[Auto] Running in {mode} mode...")
         bleichenbacher_demo(use_fast=fast_default)
+        if wait_for_key:
+            input("\nPress Enter to return to the main menu...")
         line()
         return
 
@@ -352,11 +364,15 @@ def run_bleichenbacher(run_default: bool = False, fast_default: bool = True):
         if choice == "1":
             print()
             bleichenbacher_demo(use_fast=False)
+            if wait_for_key:
+                input("\nPress Enter to return to the main menu...")
             line()
             break
         elif choice == "2":
             print()
             bleichenbacher_demo(use_fast=True)
+            if wait_for_key:
+                input("\nPress Enter to return to the main menu...")
             line()
             break
         elif choice == "0":
