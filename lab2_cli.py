@@ -109,16 +109,67 @@ def _run_aes_demos():
     aes_roundtrip()
     print()
     print("[AES] ECB pattern leakage demo:")
-    demo_ecb_pattern_leakage()
+    ecb_data = demo_ecb_pattern_leakage()
+    print(f"    Key: {ecb_data['key'].hex()}")
+    print(
+        f"    Total blocks: {ecb_data['total_blocks']}, unique blocks: {ecb_data['unique_blocks']} (lower is worse)"
+    )
+    print("    Ciphertext block pattern (repeats marked with *):")
+    for block in ecb_data["block_metadata"]:
+        marker = "*" if block["repeats"] > 1 else " "
+        print(f"      Block {block['index']:02d}{marker}: {block['hex']}")
     print()
     print("[AES] CBC IV reuse demo:")
-    demo_cbc_iv_reuse()
+    cbc_data = demo_cbc_iv_reuse()
+    print(f"    Key: {cbc_data['key'].hex()}")
+    print(f"    Reused IV: {cbc_data['iv'].hex()}")
+    print(f"    Second ciphertext blocks differ? {cbc_data['second_block_differs']}")
+    print(
+        "    XOR(C1[0], C2[0]) == XOR(P1[0], P2[0])?",
+        cbc_data["xor_ciphertexts"] == cbc_data["xor_plaintexts"],
+    )
+    print(f"    XOR(C1[0], C2[0]): {cbc_data['xor_ciphertexts'].hex()}")
+    print(f"    XOR(P1[0], P2[0]): {cbc_data['xor_plaintexts'].hex()}")
+    print(
+        "    Bit-flip changed first block?",
+        cbc_data["tampered_first_block"] != cbc_data["original_first_block"],
+    )
+    print(f"    Tampered P2'[0]: {cbc_data['tampered_first_block'].hex()}")
+    print(f"    Original P2[0]: {cbc_data['original_first_block'].hex()}")
     print()
     print("[AES] GCM nonce reuse demo:")
-    demo_gcm_nonce_reuse()
+    gcm_data = demo_gcm_nonce_reuse()
+    print(f"    Key: {gcm_data['key'].hex()}")
+    print(f"    Nonce (reused): {gcm_data['nonce'].hex()}")
+    print(
+        f"    Tags equal? {gcm_data['tags_equal']} | Tag #1: {gcm_data['tag_1'].hex()} | Tag #2: {gcm_data['tag_2'].hex()}"
+    )
+    print(f"    Ciphertext #1: {gcm_data['ciphertext_1'].hex()}")
+    print(f"    Ciphertext #2: {gcm_data['ciphertext_2'].hex()}")
+    if gcm_data["verification_error"]:
+        print(
+            "    Verification with wrong tag failed as expected:",
+            gcm_data["verification_error"],
+        )
+    else:
+        print("    Warning: verification unexpectedly succeeded with wrong tag!")
     print()
     print("[AES] Demonstrating keystream reuse XOR leakage in GCM:")
-    demo_gcm_keystream_reuse_xor_leak()
+    leak_data = demo_gcm_keystream_reuse_xor_leak()
+    print(f"    Key: {leak_data['key'].hex()}")
+    print(f"    Nonce reused: {leak_data['nonce'].hex()}")
+    print(
+        "    Keystream reuse equality?",
+        leak_data["leak_hex"] == leak_data["expected_hex"],
+    )
+    print(f"    XOR(ct1, ct2): {leak_data['leak_hex']}")
+    print(f"    XOR(pt1, pt2): {leak_data['expected_hex']}")
+    print(f"    Heatmap saved to: {leak_data['plot_path']}")
+    print(
+        "    Recovered differing plaintext segment:",
+        leak_data["recovered_mid"],
+    )
+    print(f"    Expected segment: {leak_data['expected_mid']}")
     print("\nAES demos done.")
     line()
 

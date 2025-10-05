@@ -1,9 +1,11 @@
+import secrets
+
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
 
 
 def gcm_with_aad_demo():
-    key = bytes.fromhex("00112233445566778899aabbccddeeff")
+    key = secrets.token_bytes(16)
     nonce = get_random_bytes(12)
     aad = b"hdr:v1;type=demo"
 

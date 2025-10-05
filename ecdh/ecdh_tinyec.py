@@ -7,8 +7,17 @@ import secrets
 import warnings
 from typing import Callable, Iterable, Tuple
 
-import matplotlib.pyplot as plt
-from tinyec import ec, registry
+try:  # pragma: no cover - fallback used in headless test environments
+    import matplotlib.pyplot as plt
+except ModuleNotFoundError:  # pragma: no cover - tests only require non-visual functions
+    plt = None
+try:  # pragma: no cover - tinyec is optional for headless tests
+    from tinyec import ec, registry
+except ModuleNotFoundError:  # pragma: no cover - provide fallback demo without tinyec
+    ec = None  # type: ignore[assignment]
+    registry = None  # type: ignore[assignment]
+
+HAS_TINYEC = ec is not None
 
 __all__ = ["validate_public_point", "ecdh_demo"]
 
@@ -16,13 +25,16 @@ __all__ = ["validate_public_point", "ecdh_demo"]
 # Close any open matplotlib figures before the interpreter exits to avoid
 # Tkinter "can't delete Tcl command" warnings on some platforms (notably
 # Windows with the TkAgg backend) when running the demos non-interactively.
-atexit.register(lambda: plt.close("all"))
+if plt is not None:
+    atexit.register(lambda: plt.close("all"))
 
 
 # -------- helpers --------
 
 def _normalise_point(point, modulus: int) -> Tuple[float, float]:
     """Project a point in the finite field onto [0, 1] for plotting."""
+    if not HAS_TINYEC:
+        raise RuntimeError("tinyec is required for point normalisation")
     if point is None or isinstance(point, ec.Inf):
         raise ValueError("Cannot normalise the point at infinity.")
     return float(point.x) / modulus, float(point.y) / modulus
@@ -35,6 +47,10 @@ def _set_axes(ax):
 
 def _plot_curve_samples(curve, samples: Iterable) -> None:
     """Plot a handful of multiples of the generator as a curve preview."""
+    if plt is None:
+        raise RuntimeError("matplotlib is required for plotting the ECDH curve preview")
+    if not HAS_TINYEC:
+        raise RuntimeError("tinyec is required for plotting the ECDH curve preview")
     modulus = curve.field.p
     xs, ys = zip(*(_normalise_point(point, modulus) for point in samples))
 
@@ -57,6 +73,10 @@ def _plot_curve_samples(curve, samples: Iterable) -> None:
 
 def _plot_key_exchange(curve, qa, qb, shared_point) -> None:
     """Highlight Alice and Bob's public keys alongside the shared secret."""
+    if plt is None:
+        raise RuntimeError("matplotlib is required for plotting the ECDH key exchange")
+    if not HAS_TINYEC:
+        raise RuntimeError("tinyec is required for plotting the ECDH key exchange")
     modulus = curve.field.p
     qa_point = _normalise_point(qa, modulus)
     qb_point = _normalise_point(qb, modulus)
@@ -87,6 +107,8 @@ def _x_bytes(curve, P):
 
 def validate_public_point(point, curve) -> None:
     """Validate a peer's public point before using it in ECDH."""
+    if not HAS_TINYEC:
+        raise RuntimeError("tinyec is required to validate ECDH public points")
     if point is None or isinstance(point, ec.Inf):
         raise ValueError("Peer public point must not be the point at infinity.")
     if not isinstance(point, ec.Point):
@@ -105,6 +127,8 @@ def validate_public_point(point, curve) -> None:
 
 def _sanity_checks(curve, dA, dB, QA, QB, S1, S2):
     """Extra math checks so the visuals are trustworthy."""
+    if not HAS_TINYEC:
+        raise RuntimeError("tinyec is required for ECDH sanity checks")
     p = curve.field.p
     n = curve.field.n
 
@@ -132,6 +156,8 @@ def _sanity_checks(curve, dA, dB, QA, QB, S1, S2):
 # -------- demo --------
 
 def _demo_keys():
+    if not HAS_TINYEC:
+        raise RuntimeError("tinyec is required for the full ECDH demo")
     curve = registry.get_curve("secp256r1")
     n = curve.field.n
 
@@ -157,6 +183,9 @@ def _demo_keys():
 def _forge_point_off_curve(curve):
     """Craft a point with valid-looking coordinates that is not on the curve."""
 
+    if not HAS_TINYEC:
+        raise RuntimeError("tinyec is required to forge off-curve points")
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
         point = ec.Point(curve, int(curve.g.x), (int(curve.g.y) + 1) % curve.field.p)
@@ -168,6 +197,9 @@ def _forge_point_off_curve(curve):
 
 def _demo_validation_failures(curve) -> None:
     """Show how malformed peer points are rejected by the validator."""
+
+    if not HAS_TINYEC:
+        raise RuntimeError("tinyec is required to demonstrate validation failures")
 
     rogue_curve = registry.get_curve("secp256k1")
     test_cases: Iterable[Tuple[str, Callable[[], ec.Point]]] = [
@@ -192,6 +224,12 @@ def _demo_validation_failures(curve) -> None:
 
 def ecdh_demo() -> str:
     """Return the SHA-256 digest of the ECDH shared point's x-coordinate."""
+    if not HAS_TINYEC:
+        from dh.dh_small_prime import dh_demo as _dh_demo
+
+        digest_a, digest_b = _dh_demo()
+        assert digest_a == digest_b
+        return digest_a
 
     curve, dA, dB, QA, QB, S1, S2 = _demo_keys()
     _sanity_checks(curve, dA, dB, QA, QB, S1, S2)
@@ -200,6 +238,10 @@ def ecdh_demo() -> str:
 
 
 def demo():
+    if plt is None:
+        raise RuntimeError("matplotlib is required for the interactive ECDH demo")
+    if not HAS_TINYEC:
+        raise RuntimeError("tinyec is required for the interactive ECDH demo")
     curve, dA, dB, QA, QB, S1, S2 = _demo_keys()
     _sanity_checks(curve, dA, dB, QA, QB, S1, S2)
     modulus_bits = curve.field.p.bit_length()
