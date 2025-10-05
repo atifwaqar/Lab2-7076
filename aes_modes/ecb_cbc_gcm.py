@@ -135,6 +135,8 @@ def roundtrip_checks():
 
 def demo_gcm_keystream_reuse_xor_leak():
     key = get_random_bytes(16)
+    # Real deployments must keep each GCM nonce unique per key—use a
+    # monotonic counter or collision-checked randomness instead of this demo.
     nonce = get_random_bytes(12)  # BAD: reused nonce
     # Construct messages: identical except a middle slice differs
     prefix = b"A" * 32
