@@ -12,6 +12,7 @@ It runs and demonstrates the oracle behavior.
 
 import secrets
 import sys
+from math import gcd
 from pathlib import Path
 
 try:
@@ -40,6 +41,9 @@ def bleichenbacher_attack(c0: int, e: int, n: int, k: int, oracle) -> bytes:
     i = 1
 
     def query(s_candidate: int) -> bool:
+        # ensure s is invertible mod n (s ∈ Z*_n)
+        if gcd(s_candidate, n) != 1:
+            return False
         c_test = (c0 * pow(s_candidate, e, n)) % n
         return oracle(c_test)
 
@@ -91,6 +95,9 @@ def bleichenbacher_attack(c0: int, e: int, n: int, k: int, oracle) -> bytes:
             r_max = floor_div(b * s - two_B, n)
             if r_min > r_max:
                 continue
+            # guard against runaway ranges (prevents MemoryError)
+            if r_max - r_min > 2_000_000:
+                raise RuntimeError("r-range too large; check k/B/oracle correctness.")
             for r in range(r_min, r_max + 1):
                 new_a = max(a, ceil_div(two_B + r * n, s))
                 new_b = min(b, floor_div(three_B - 1 + r * n, s))
@@ -108,7 +115,8 @@ def bleichenbacher_attack(c0: int, e: int, n: int, k: int, oracle) -> bytes:
                 merged.append((start, end))
                 continue
             prev_start, prev_end = merged[-1]
-            if start <= prev_end:
+            # merge overlapping OR adjacent intervals
+            if start <= prev_end + 1:
                 merged[-1] = (prev_start, max(prev_end, end))
             else:
                 merged.append((start, end))
@@ -120,8 +128,8 @@ def bleichenbacher_attack(c0: int, e: int, n: int, k: int, oracle) -> bytes:
             a, b = M[0]
             if a == b:
                 m = a
-                padded = os2ip(m, length=k)
-                return pkcs1v15_unpad(padded)
+                em = os2ip(m, length=k)
+                return pkcs1v15_unpad(em)
 
         i += 1
 
@@ -171,6 +179,7 @@ def demo_oracle():
     k = (n.bit_length() + 7) // 8
     pt = b"A"
     em = pkcs1v15_pad(pt, k)
+    # bytes -> int conversion uses the project helper i2osp (bytes → int)
     c = encrypt_int(i2osp(em), e, n)
     valid = oracle_padding_valid(c, d, n, k)
     print(f"Oracle says padding valid? {valid} (expected True)")
